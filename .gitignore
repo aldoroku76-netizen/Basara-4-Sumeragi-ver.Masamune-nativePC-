@@ -32,6 +32,9 @@ DLC/*.pkg
 # Runtime Preparation & Decompiled Artifacts (Generated at launch)
 out/
 
+# Release binaries are attached to GitHub Releases, not committed to the repository.
+/basara4-ver.Masamune-v1.00.zip
+
 # Diagnostics, Logs, & Audio Captures
 *.log
 *.wav
