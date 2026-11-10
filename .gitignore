@@ -1,0 +1,70 @@
+# =============================================================================
+# Sengoku Basara 4 Sumeragi (Native PC Port & Launcher) - .gitignore
+# Developer: Timotius (v1.0.0)
+# =============================================================================
+
+# Byte-compiled Python files (keep runtime .pyd extension modules trackable)
+__pycache__/
+*.pyc
+*.pyo
+*$py.class
+*.pyc_raw
+
+# Backups & Temporary Files
+*.bak
+*.tmp
+*.orig
+*.v1
+scratch/
+temp/
+
+# Copyrighted PS4 Game Dumps, including game/CUSA01159, & PKG Archives (Strictly Excluded)
+# No copyrighted ROMs, game dumps, or packages should ever be committed.
+game/*
+!game/PUT_YOUR_GAME_DUMP_HERE.txt
+!game/.gitkeep
+*.pkg
+*.rar
+DLC/DLC/
+DLC/*.rar
+DLC/*.pkg
+
+# Runtime Preparation & Decompiled Artifacts (Generated at launch)
+out/
+
+# Diagnostics, Logs, & Audio Captures
+*.log
+*.wav
+logs/
+
+# Local User Saves, Caches, & Runtime Data
+user/cache/
+user/captures/
+user/dlc/
+user/download/
+user/download0/
+user/game_data/
+user/home/
+user/savedata/
+user/screenshots/
+user/shader/
+user/temp/
+user/temp0/
+user/trophy/
+user/custom_trophy/
+user/data/
+user/*.log
+user/*.bmp
+user/test_*
+user/preview_*
+user/raw_bg_thumb.jpg
+user/basara4.ini
+user/launcher.json
+user/spartanport.ini
+
+# OS & Editor Metadata
+Thumbs.db
+[Dd]esktop.ini
+.DS_Store
+.idea/
+.vscode/

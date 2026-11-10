@@ -1,0 +1,2 @@
+Put the folder that contains eboot.bin here (or choose it with Browse in the launcher).
+No game files are included with this program.
