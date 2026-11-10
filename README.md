@@ -9,7 +9,7 @@
 > **Native Windows x64 PC Port & Custom Desktop Launcher for Sengoku Basara 4 Sumeragi (`CUSA01159`).**  
 > Built with direct x86-64 CPU execution, real-time Orbis OS to Win32 syscall translation, Vulkan SPIR-V graphics pipeline with AMD FSR 1.0 & RCAS, hardware-synchronized ATRAC9 audio, and a custom 60 FPS hardware-sliced UI engine by **Timotius**.
 
-![Launcher Preview](assets/launcherbg.jpg)
+![Launcher Preview](assets/launcher_preview.jpg)
 
 ---
 
