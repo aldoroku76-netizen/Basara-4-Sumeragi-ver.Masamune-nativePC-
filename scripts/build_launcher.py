@@ -187,6 +187,7 @@ def update_pe_icon(exe_path, ico_path):
 
 
 def main():
+    shutil.copy2(LAUNCHER_PY, ROOT / "_internal" / "basara4_launcher.py")
     compile_with_python312()
     rebuild_pyinstaller_exe(ORIG_EXE, PYC_RAW, TARGET_EXE1)
     # Also create Basara4Launcher.exe so both executable references work
@@ -197,6 +198,20 @@ def main():
     if yukimura_ico.is_file():
         update_pe_icon(TARGET_EXE1, yukimura_ico)
         update_pe_icon(TARGET_EXE2, yukimura_ico)
+
+    # Clean temporary build artifacts
+    for tmp in (PYC_RAW, ROOT / "scratch" / "temp_pe.exe"):
+        try:
+            if tmp.is_file():
+                tmp.unlink()
+        except OSError:
+            pass
+    try:
+        scratch_dir = ROOT / "scratch"
+        if scratch_dir.is_dir() and not any(scratch_dir.iterdir()):
+            scratch_dir.rmdir()
+    except OSError:
+        pass
     print("\n[SUCCESS] Build completed successfully!")
 
 

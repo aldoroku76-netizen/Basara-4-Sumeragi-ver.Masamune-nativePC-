@@ -83,109 +83,231 @@ WINDOW_ICON = USER / "window_icon.bmp"
 
 CORE = BIN / "basara4-core.exe"
 
-VERSION = "1.0.0"
+VERSION = "1.0.9"
 
 BRAND = "Basara 4 PC"
 
 AUTHOR = "Timotius"
 
-GITHUB_REPO = "timotius/basara4-native-pc"
+GITHUB_REPO = "aldoroku76-netizen/Basara-4-Sumeragi-ver.Masamune-nativePC-"
+BUG_REPORT_URL = f"https://github.com/{GITHUB_REPO}/issues"
 
 CRIMSON_HEADER = "#D32F2F"        # Official Basara 4 Crimson Red accent
 
 
-
 FATAL_PATTERNS = [
-
     r"(STOP: .*)",
-
     r"(Fault: .*)",
-
+    r"(GPU \[Debug\] <Critical> .*)",
+    r"(Failed to create (?:graphics|compute|the squaring) pipeline.*)",
     r"(ASSERT_MSG.*)",
-
     r"(vk::Result=.*)",
-
     r"(VK_ERROR_\w+)",
-
     r"(GPU \[Render\.Vulkan\] <Error> .*)",
-
-    r"(GPU \[Render\.Vulkan\] <Warning> .*)",
-
     r"(GPU \[Lib\.\w+\] <Error> .*)",
-
-    r"(Runtime: open\(.*?\) -> not found)",
-
     r"(guest raised debug exception .*)",
-
     r"(cannot create \d+ MiB of guest memory .*)",
-
     r"(error 1455.*)",
-
     r"(ERROR_COMMITMENT_LIMIT.*)",
-
     r"(no rewrite table matches the image.*)",
-
     r"(missing MOVBE, BMI1, LZCNT.*)",
-
+    r"(Failed allocating (?:image|buffer|texture) with error .*)",
+    r"(Required Vulkan (?:extension|feature) unavailable: .*)",
+    r"(Vulkan \d+\.\d+ is required.*)",
+    r"(Failed to create (?:Vulkan logical )?device.*)",
 ]
 
 
+def explain_hardware_crash(exit_code, detected_errors, tail_context, lang="en"):
+    """Translates raw exit codes and log signatures into clear hardware/memory diagnostics (EN & ID)."""
+    joined = "\n".join(detected_errors) + "\n" + (tail_context or "")
+    low = joined.lower()
+    code_u32 = (exit_code & 0xFFFFFFFF) if isinstance(exit_code, int) else 0
+    hints = []
+    is_id = (lang == "id")
+
+    if "error_commitment_limit" in low or "error 1455" in low or ("cannot create" in low and "guest memory" in low):
+        hints.append(
+            ("💾 Memori Virtual Windows (RAM / Page File) Habis [Error 1455]:\n"
+             "Kapasitas RAM ditambah page file Windows tidak cukup untuk mengalokasikan memori game.\n"
+             "👉 Solusi: buka Pengaturan Windows -> Advanced System Settings -> Performance -> Advanced -> Virtual Memory, "
+             "centang 'Automatically manage paging file size for all drives', tutup aplikasi berat (Chrome/Discord), lalu restart PC.")
+            if is_id else
+            ("💾 Windows Virtual Memory (RAM / Page File) Ran Out [Error 1455]:\n"
+             "RAM plus the Windows page file is not enough to allocate the game's memory.\n"
+             "👉 Fix: open Windows Settings -> Advanced System Settings -> Performance -> Advanced -> Virtual Memory, "
+             "tick 'Automatically manage paging file size for all drives', close heavy apps (Chrome/Discord), then restart the PC.")
+        )
+
+    if ("erroroutofdevicememory" in low or "vk_error_out_of_device_memory" in low or
+            "erroroutofhostmemory" in low or "vk_error_out_of_host_memory" in low or
+            "failed allocating image" in low or "failed allocating buffer" in low or
+            "failed allocating texture" in low):
+        hints.append(
+            ("🎮 Memori Grafis (VRAM / Shared GPU Memory) Tidak Cukup:\n"
+             "GPU kehabisan VRAM atau memori sistem saat memuat tekstur/buffer.\n"
+             "👉 Solusi: turunkan Ukuran Resolusi di launcher ke 540p atau 720p, matikan Upscaler (Off), "
+             "dan tutup aplikasi lain yang menggunakan akselerasi GPU.")
+            if is_id else
+            ("🎮 Not Enough Graphics Memory (VRAM / Shared GPU Memory):\n"
+             "The GPU ran out of VRAM or system memory while loading textures/buffers.\n"
+             "👉 Fix: lower Resolution in the launcher to 540p or 720p, turn the Upscaler Off, "
+             "and close other apps that use GPU acceleration.")
+        )
+
+    if ("required vulkan extension unavailable" in low or
+            "required vulkan feature unavailable" in low or
+            "vulkan 1.3 is required" in low or
+            "failed to create device" in low or
+            "failed to create vulkan logical device" in low or
+            "unable to find a suitable physical device" in low):
+        hints.append(
+            ("⚠️ Kartu Grafis (GPU) atau Driver Belum Mendukung Vulkan 1.3:\n"
+             "GPU yang dipilih belum mendukung fitur Vulkan 1.3 yang dibutuhkan game.\n"
+             "👉 Solusi: perbarui driver grafis (Intel / AMD Adrenalin / NVIDIA GeForce) ke versi terbaru. "
+             "Jika laptop/PC memiliki 2 GPU, pilih GPU diskrit (NVIDIA/AMD) pada menu Kartu Grafis di launcher.")
+            if is_id else
+            ("⚠️ Graphics Card (GPU) or Driver Does Not Support Vulkan 1.3 Yet:\n"
+             "The selected GPU lacks the Vulkan 1.3 features the game needs to render.\n"
+             "👉 Fix: update the graphics driver (Intel / AMD Adrenalin / NVIDIA GeForce) to the latest version. "
+             "If the laptop/PC has 2 GPUs, choose the dedicated GPU (NVIDIA/AMD) in the launcher's GPU menu.")
+        )
+
+    if "device lost" in low or "eerrordevicelost" in low or "vk_error_device_lost" in low:
+        hints.append(
+            ("🔌 Koneksi Kartu Grafis Terputus (GPU Device Lost / Driver Timeout):\n"
+             "Driver GPU berhenti merespons akibat beban render tinggi atau driver tidak stabil.\n"
+             "👉 Solusi: turunkan Ukuran Resolusi ke 720p, matikan Upscaler, dan pastikan driver GPU sudah versi terbaru.")
+            if is_id else
+            ("🔌 Graphics Card Connection Lost (GPU Device Lost / Driver Timeout):\n"
+             "The GPU driver stopped responding because of heavy rendering load or an unstable driver.\n"
+             "👉 Fix: lower Resolution to 720p, turn the Upscaler off, and make sure the GPU driver is up to date.")
+        )
+
+    if "failed to create graphics pipeline" in low or "failed to create compute pipeline" in low:
+        hints.append(
+            ("🛠️ Kompilasi Shader / Pipeline Vulkan Gagal:\n"
+             "Driver GPU gagal mengompilasi pipeline grafis.\n"
+             "👉 Solusi: perbarui driver Vulkan GPU Anda ke versi terbaru.")
+            if is_id else
+            ("🛠️ Vulkan Shader / Pipeline Compilation Failed:\n"
+             "The GPU driver failed to compile a graphics pipeline.\n"
+             "👉 Fix: update your GPU's Vulkan driver to the latest version.")
+        )
+
+    if "missing movbe, bmi1, lzcnt" in low or "no rewrite table matches" in low:
+        hints.append(
+            ("🖥️ Instruksi CPU (x86-64-v3 / AVX2 / BMI1) Tidak Cocok:\n"
+             "Prosesor membutuhkan tabel translasi instruksi (isa-rewrite.bin).\n"
+             "👉 Solusi: hapus folder out\\ agar launcher membuat ulang isa-rewrite.bin secara otomatis.")
+            if is_id else
+            ("🖥️ CPU Instructions (x86-64-v3 / AVX2 / BMI1) Do Not Match:\n"
+             "The processor needs an instruction translation table (isa-rewrite.bin).\n"
+             "👉 Fix: delete the out\\ folder so isa-rewrite.bin is rebuilt automatically on launch.")
+        )
+
+    if not hints:
+        if code_u32 == 0xC0000409:
+            hints.append(
+                ("💥 Crash Driver Grafis / Batas Memori Sistem (Exit Code 0xC0000409):\n"
+                 "Windows atau driver GPU menghentikan proses secara paksa (umum terjadi pada PC dengan RAM 8 GB atau iGPU seperti "
+                 "Intel UHD / AMD Radeon Graphics saat memori/VRAM penuh).\n"
+                 "👉 Solusi: gunakan Resolusi 540p atau 720p, matikan Upscaler, aktifkan Windows Paging File (Virtual Memory), "
+                 "dan perbarui driver grafis.")
+                if is_id else
+                ("💥 Graphics Driver Crash / System Memory Limit (Exit Code 0xC0000409):\n"
+                 "Windows or the GPU driver force-stopped the process (common on PCs with 8 GB RAM or an iGPU such as "
+                 "Intel UHD / AMD Radeon Graphics when system memory/VRAM is full or a driver feature is not supported).\n"
+                 "👉 Fix: use Resolution 540p or 720p, turn the Upscaler Off, enable the Windows Paging File (Virtual Memory), "
+                 "and update your graphics driver.")
+            )
+        elif code_u32 == 0xC0000005:
+            hints.append(
+                ("💥 Pelanggaran Akses Memori (0xC0000005):\n"
+                 "Terjadi konflik akses memori pada driver GPU atau data game.\n"
+                 "👉 Solusi: turunkan Resolusi ke 720p dan pastikan driver GPU sudah versi terbaru.")
+                if is_id else
+                ("💥 Memory Access Violation (0xC0000005):\n"
+                 "A memory access conflict happened in the GPU driver or the game data.\n"
+                 "👉 Fix: lower Resolution to 720p and make sure the GPU driver is up to date.")
+            )
+        elif code_u32 == 0x17:
+            hints.append(
+                ("⚠️ Kegagalan Inisialisasi GPU / Assertion (Exit Code 0x17):\n"
+                 "Renderer Vulkan berhenti karena batas resource GPU/VRAM atau fitur driver tidak terpenuhi.\n"
+                 "👉 Solusi: turunkan Resolusi ke 540p/720p, matikan Upscaler, dan periksa driver Vulkan GPU Anda.")
+                if is_id else
+                ("⚠️ GPU Initialization / Assertion Failure (Exit Code 0x17):\n"
+                 "The Vulkan renderer stopped because a GPU/VRAM resource limit or a driver feature was not met.\n"
+                 "👉 Fix: lower Resolution to 540p/720p, turn the Upscaler off, and check your GPU's Vulkan driver.")
+            )
+        elif code_u32 == 0xC0000139:
+            hints.append(
+                ("🧩 Vulkan Tidak Ditemukan atau Terlalu Lama (Exit Code 0xC0000139):\n"
+                 "Windows tidak dapat memuat game karena komponen Vulkan pada PC tidak ada atau terlalu lama.\n"
+                 "👉 Solusi: perbarui driver grafis (NVIDIA / AMD / Intel), lalu coba lagi.")
+                if is_id else
+                ("🧩 Vulkan Not Found or Too Old (Exit Code 0xC0000139):\n"
+                 "Windows could not load the game because the PC's Vulkan components are missing or too old.\n"
+                 "👉 Fix: update the graphics driver (NVIDIA / AMD / Intel), then start again.")
+            )
+        elif code_u32 == 0xC0000135:
+            hints.append(
+                ("📁 File Runtime Tidak Lengkap (Exit Code 0xC0000135):\n"
+                 "Windows tidak menemukan salah satu file DLL yang dibutuhkan game.\n"
+                 "👉 Solusi: ekstrak ulang arsip port secara lengkap dan pastikan antivirus tidak mengkarantina file di bin\\.")
+                if is_id else
+                ("📁 Game Files Incomplete (Exit Code 0xC0000135):\n"
+                 "Windows could not find one of the files the game needs.\n"
+                 "👉 Fix: extract the port ZIP completely into a new folder, and make sure antivirus did not quarantine any file.")
+            )
+
+    return hints
 
 
-
-def extract_crash_summary(log_path, max_context_lines=10):
-
-    """Parses log from bottom-up and extracts fatal signatures and tail context."""
-
+def extract_crash_summary(log_path, max_context_lines=10, max_signatures=4):
+    """The fatal signatures of a log, newest first with Fault/STOP/ASSERT always on top, the unusual
+    not-found misses, and the last lines (File trace lines left out so they do not crowd them)."""
+    empty = {"unusual_not_found": [], "near_primary_not_found": [], "near_primary_stubs": [], "hidden_not_found": 0}
     if not log_path.is_file():
-
-        return {"detected_errors": ["File log tidak ditemukan (game belum sempat menulis log)."], "tail_context": ""}
-
+        return dict(empty, detected_errors=["Log file not found (the game stopped before writing a log)."], tail_context="")
     try:
-
         lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
-
     except Exception as e:
-
-        return {"detected_errors": [f"Gagal membaca log: {e}"], "tail_context": ""}
-
+        return dict(empty, detected_errors=[f"Cannot read the log: {e}"], tail_context="")
     if not lines:
+        return dict(empty, detected_errors=["Log is empty (the game stopped before it started up)."], tail_context="")
 
-        return {"detected_errors": ["Log kosong (game berhenti sebelum inisialisasi)."], "tail_context": ""}
-
-
-
-    tail_lines = lines[-max_context_lines:]
-
-    detected = []
-
+    primary, other = [], []
     for line in reversed(lines):
-
+        if basara4_report and basara4_report.STUB_CALL.search(line):
+            continue
         for pat in FATAL_PATTERNS:
-
             m = re.search(pat, line)
-
             if m:
-
                 matched_str = m.group(1).strip()
-
-                if matched_str not in detected:
-
-                    detected.append(matched_str)
-
-        if len(detected) >= 4:
-
-            break
-
-    return {
-
-        "detected_errors": detected if detected else ["Tidak ada fatal signature terdaftar (game keluar mendadak)."],
-
-        "tail_context": "\n".join(tail_lines),
-
-        "total_lines": len(lines)
-
-    }
+                if matched_str not in primary and matched_str not in other:
+                    is_prim = bool(basara4_report and basara4_report.PRIMARY.search(matched_str))
+                    (primary if is_prim else other).append(matched_str)
+    detected = (primary + other)[:max_signatures]
+    if basara4_report:
+        analysis = basara4_report.analyze_log(lines)
+        tail_lines = basara4_report.tail_without_trace(lines, max_context_lines)
+        return {
+            "detected_errors": detected if detected else ["No known error pattern in the log (the game closed suddenly)."],
+            "tail_context": "\n".join(tail_lines),
+            "total_lines": len(lines),
+            "unusual_not_found": analysis["unusual_not_found"],
+            "near_primary_not_found": analysis["near_primary_not_found"],
+            "hidden_not_found": analysis["hidden_not_found"],
+            "near_primary_stubs": analysis["near_primary_stubs"],
+        }
+    return dict(
+        empty,
+        detected_errors=detected if detected else ["No known error pattern in the log (the game closed suddenly)."],
+        tail_context="\n".join(lines[-max_context_lines:]),
+        total_lines=len(lines),
+    )
 
 
 
@@ -298,6 +420,13 @@ DEBUG_LOG = USER / "debug_launch.log"
 LAUNCH_DEBUG_LOG = USER / "launch_debug.log"
 
 AUDIO_WAV = USER / "audio_wav"
+RENDER_TRACE_LOG = USER / "render_trace.log"
+RENDER_TRACES = USER / "render_traces"
+CAPTURES_DIR = USER / "captures"
+REPORTS = USER / "reports"
+CRASH_DIR = USER / "crash"
+CRASH_DIALOG_SIZE = (820, 720)
+SCREEN_KEEP_FREE = (40, 90)
 
 STAMP = OUT / "prepared.json"
 
@@ -619,7 +748,7 @@ try:
 
     import basara4_dlc  # noqa: E402
 
-    from basara4_dlc import scan_extracted_dlc  # noqa: E402
+    from basara4_dlc import scan_extracted_dlc, _parse_sfo as parse_sfo  # noqa: E402
 
     log_debug("basara4_dlc successfully imported")
 
@@ -629,7 +758,23 @@ except ImportError as e:
 
     scan_extracted_dlc = None
 
+    parse_sfo = None
+
     log_debug(f"basara4_dlc import failed: {e}")
+
+try:
+    import basara4_controller  # noqa: E402
+    log_debug("basara4_controller successfully imported")
+except ImportError as e:
+    basara4_controller = None
+    log_debug(f"basara4_controller import failed: {e}")
+
+try:
+    import basara4_report  # noqa: E402
+    log_debug("basara4_report successfully imported")
+except ImportError as e:
+    basara4_report = None
+    log_debug(f"basara4_report import failed: {e}")
 
 
 
@@ -711,148 +856,514 @@ ACTION_DESCRIPTIONS = [
 
 
 
-def enumerate_gpus():
+import collections
+import itertools
 
-    """Enumerate system Vulkan GPUs using vulkan-1.dll. Returns list of (index, display_name, is_discrete)."""
+VULKAN_REQUIRED = (1, 3)
 
-    gpus = [(-1, "Auto (Prioritaskan GPU Diskrit)", True)]
+VulkanProbe = collections.namedtuple("VulkanProbe", "loaded loader instance devices error drivers dll",
+                                     defaults=((), None))
 
+
+def vulkan_version(value):
+    """(major, minor) of a packed Vulkan API version."""
+    return ((value >> 22) & 0x7F, (value >> 12) & 0x3FF)
+
+
+def loaded_module_path(handle):
+    """The file a loaded DLL came from (GetModuleFileNameW), or None."""
+    if not handle or os.name != "nt":
+        return None
+    buffer = ctypes.create_unicode_buffer(32768)
+    length = ctypes.windll.kernel32.GetModuleFileNameW(ctypes.c_void_p(handle), buffer, len(buffer))
+    return buffer.value if length else None
+
+
+def file_version(path):
+    """The FileVersion of a Windows file ("1.4.309.0"), or an unknown() with the reason."""
+    if not path:
+        return {"unknown": "no file"}
+    if os.name != "nt":
+        return {"unknown": "not Windows"}
+    ver = ctypes.windll.version
+    size = ver.GetFileVersionInfoSizeW(str(path), None)
+    if not size:
+        return {"unknown": f"no version resource (error {ctypes.GetLastError()})"}
+    data = ctypes.create_string_buffer(size)
+    if not ver.GetFileVersionInfoW(str(path), 0, size, data):
+        return {"unknown": f"GetFileVersionInfoW failed (error {ctypes.GetLastError()})"}
+    info, length = ctypes.c_void_p(), wintypes.UINT()
+    if not ver.VerQueryValueW(data, "\\", ctypes.byref(info), ctypes.byref(length)) or length.value < 52:
+        return {"unknown": "no fixed file info"}
+    ms, ls = ctypes.cast(info, ctypes.POINTER(ctypes.c_uint32))[2:4]
+    return f"{ms >> 16}.{ms & 0xFFFF}.{ls >> 16}.{ls & 0xFFFF}"
+
+
+def driver_version_text(vendor, raw):
+    """A GPU driver version as its vendor writes it (NVIDIA and Intel pack it their own way)."""
+    if vendor == 0x10DE:
+        return f"{raw >> 22}.{(raw >> 14) & 0xFF}.{(raw >> 6) & 0xFF}.{raw & 0x3F}"
+    if vendor == 0x8086 and os.name == "nt":
+        return f"{raw >> 14}.{raw & 0x3FFF}"
+    return f"{raw >> 22}.{(raw >> 12) & 0x3FF}.{raw & 0xFFF}"
+
+
+def probe_vulkan(load=None):
+    """Ask vulkan-1.dll for its loader version and its GPUs (load: the DLL loader, for tests)."""
     try:
-
-        vulkan = ctypes.cdll.LoadLibrary("vulkan-1.dll")
+        vulkan = (load or ctypes.cdll.LoadLibrary)("vulkan-1.dll")
+    except OSError as exc:
+        return VulkanProbe(False, None, False, [], f"vulkan-1.dll: {exc}")
+    loader, instance, devices, drivers = None, False, [], []
+    dll = loaded_module_path(getattr(vulkan, "_handle", None))
+    try:
+        enumerate_version = getattr(vulkan, "vkEnumerateInstanceVersion", None)
+        if enumerate_version is None:
+            loader = (1, 0)
+        else:
+            enumerate_version.argtypes = [ctypes.POINTER(ctypes.c_uint32)]
+            enumerate_version.restype = ctypes.c_int32
+            version = ctypes.c_uint32(0)
+            if enumerate_version(ctypes.pointer(version)) == 0:
+                loader = vulkan_version(version.value)
 
         class VkApplicationInfo(ctypes.Structure):
-
             _fields_ = [
-
                 ("sType", ctypes.c_uint32), ("pNext", ctypes.c_void_p),
-
                 ("pApplicationName", ctypes.c_char_p), ("applicationVersion", ctypes.c_uint32),
-
                 ("pEngineName", ctypes.c_char_p), ("engineVersion", ctypes.c_uint32),
-
                 ("apiVersion", ctypes.c_uint32),
-
             ]
 
         class VkInstanceCreateInfo(ctypes.Structure):
-
             _fields_ = [
-
                 ("sType", ctypes.c_uint32), ("pNext", ctypes.c_void_p),
-
                 ("flags", ctypes.c_uint32), ("pApplicationInfo", ctypes.POINTER(VkApplicationInfo)),
-
                 ("enabledLayerCount", ctypes.c_uint32), ("ppEnabledLayerNames", ctypes.c_void_p),
-
                 ("enabledExtensionCount", ctypes.c_uint32), ("ppEnabledExtensionNames", ctypes.c_void_p),
-
             ]
 
         class VkPhysicalDeviceProperties(ctypes.Structure):
-
             _fields_ = [
-
                 ("apiVersion", ctypes.c_uint32), ("driverVersion", ctypes.c_uint32),
-
                 ("vendorID", ctypes.c_uint32), ("deviceID", ctypes.c_uint32),
-
                 ("deviceType", ctypes.c_uint32), ("deviceName", ctypes.c_char * 256),
-
                 ("pipelineCacheUUID", ctypes.c_ubyte * 16), ("limits", ctypes.c_byte * 504),
-
                 ("sparseProperties", ctypes.c_byte * 20),
-
             ]
 
         app_info = VkApplicationInfo(sType=1, pApplicationName=b"Basara4Launcher", apiVersion=(1 << 22) | (2 << 12))
-
         ci = VkInstanceCreateInfo(sType=2, pApplicationInfo=ctypes.pointer(app_info))
-
         vulkan.vkCreateInstance.argtypes = [ctypes.POINTER(VkInstanceCreateInfo), ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)]
-
         vulkan.vkCreateInstance.restype = ctypes.c_int32
-
         vulkan.vkDestroyInstance.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-
         vulkan.vkEnumeratePhysicalDevices.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_void_p)]
-
         vulkan.vkEnumeratePhysicalDevices.restype = ctypes.c_int32
-
         vulkan.vkGetPhysicalDeviceProperties.argtypes = [ctypes.c_void_p, ctypes.POINTER(VkPhysicalDeviceProperties)]
 
-
-
         inst = ctypes.c_void_p()
-
-        if vulkan.vkCreateInstance(ctypes.byref(ci), None, ctypes.byref(inst)) == 0:
-
+        if vulkan.vkCreateInstance(ctypes.pointer(ci), None, ctypes.pointer(inst)) == 0:
+            instance = True
             count = ctypes.c_uint32(0)
-
-            vulkan.vkEnumeratePhysicalDevices(inst, ctypes.byref(count), None)
-
+            vulkan.vkEnumeratePhysicalDevices(inst, ctypes.pointer(count), None)
             if count.value > 0:
-
                 devs = (ctypes.c_void_p * count.value)()
-
-                vulkan.vkEnumeratePhysicalDevices(inst, ctypes.byref(count), devs)
-
+                vulkan.vkEnumeratePhysicalDevices(inst, ctypes.pointer(count), devs)
                 for i in range(count.value):
-
                     p = VkPhysicalDeviceProperties()
-
-                    vulkan.vkGetPhysicalDeviceProperties(devs[i], ctypes.byref(p))
-
+                    vulkan.vkGetPhysicalDeviceProperties(devs[i], ctypes.pointer(p))
                     name = p.deviceName.decode("utf-8", errors="replace").strip("\x00")
-
-                    is_disc = (p.deviceType == 2)
-
-                    kind_tag = "dGPU" if is_disc else ("iGPU" if p.deviceType == 1 else "GPU")
-
-                    gpus.append((i, f"GPU {i}: {name} ({kind_tag})", is_disc))
-
+                    devices.append((name, p.deviceType, vulkan_version(p.apiVersion)))
+                    drivers.append((p.vendorID, p.driverVersion))
             vulkan.vkDestroyInstance(inst, None)
+    except Exception as exc:
+        return VulkanProbe(True, loader, instance, devices, f"{type(exc).__name__}: {exc}", drivers, dll)
+    return VulkanProbe(True, loader, instance, devices, "", drivers, dll)
 
-    except Exception as e:
 
-        log_debug(f"Vulkan GPU enumeration error: {e}")
-
+def gpu_choices(probe):
+    """The Graphics card list: Auto, then each GPU as (index, display_name, is_discrete)."""
+    gpus = [(-1, "Auto (Prefer discrete GPU / Prioritaskan GPU Diskrit)", True)]
+    for i, (name, kind, _api) in enumerate(probe.devices):
+        is_disc = (kind == 2)
+        kind_tag = "dGPU" if is_disc else ("iGPU" if kind == 1 else "GPU")
+        gpus.append((i, f"GPU {i}: {name} ({kind_tag})", is_disc))
     return gpus
 
 
+def enumerate_gpus():
+    return gpu_choices(probe_vulkan())
 
 
+def game_gpu_id(gpu_index, gpus):
+    """The GPU the game is started on (SPARTAN_GPU_ID), or None to let the game choose."""
+    if gpu_index != -1:
+        return gpu_index
+    return next((idx for idx, _, is_disc in gpus if is_disc and idx >= 0), None)
 
-SYSTEM_GPUS = enumerate_gpus()
+
+def vulkan_problem(probe, gpu_id):
+    """Why the game will not start on this Vulkan, or None: 'missing', 'old', or 'no_gpu'."""
+    if not probe.loaded:
+        return "missing"
+    if probe.error:
+        return None
+    if probe.loader is not None and probe.loader < VULKAN_REQUIRED:
+        return "old"
+    if not probe.devices:
+        return "no_gpu"
+    if gpu_id is not None and 0 <= gpu_id < len(probe.devices):
+        apis = [probe.devices[gpu_id][2]]
+    else:
+        apis = [api for _, _, api in probe.devices]
+    return None if any(api >= VULKAN_REQUIRED for api in apis) else "old"
+
+
+def vulkan_warning(problem, probe, gpu_id, lang="en"):
+    """The question shown before the game starts, as (title, message), for vulkan_problem(probe, gpu_id)."""
+    need = "%d.%d" % VULKAN_REQUIRED
+    is_id = (lang == "id")
+    run_anyway = "Tetap jalankan game?" if is_id else "Start the game anyway?"
+    if problem == "old":
+        if probe.loader is not None and probe.loader < VULKAN_REQUIRED:
+            have = probe.loader
+        elif gpu_id is not None and 0 <= gpu_id < len(probe.devices):
+            have = probe.devices[gpu_id][2]
+        else:
+            have = max(api for _, _, api in probe.devices)
+        gpus = "".join(f"  • {name} — Vulkan {major}.{minor}\n" for name, _, (major, minor) in probe.devices)
+        if is_id:
+            return "Versi Vulkan Terlalu Lama", (
+                f"⚠️ Game ini membutuhkan Vulkan {need}, tetapi PC ini hanya mendukung Vulkan {have[0]}.{have[1]}.\n\n"
+                + (f"Kartu grafis yang terdeteksi:\n{gpus}\n" if gpus else "")
+                + "👉 Solusi: pasang driver terbaru langsung dari situs resmi NVIDIA, AMD, atau Intel (bukan dari Windows Update), "
+                "lalu restart PC.\n"
+                f"Jika driver sudah versi terbaru, kartu grafis ini belum mendukung Vulkan {need}.\n\n" + run_anyway)
+        return "Vulkan Too Old", (
+            f"⚠️ This game needs Vulkan {need}, but this PC only supports Vulkan {have[0]}.{have[1]}.\n\n"
+            + (f"Graphics cards found:\n{gpus}\n" if gpus else "")
+            + "👉 Fix: install the latest driver from the NVIDIA, AMD or Intel website (not from Windows Update), "
+            "then restart the PC.\n"
+            f"If the driver is already the latest, this graphics card does not support Vulkan {need}, so the game "
+            "cannot run on this PC.\n\n" + run_anyway)
+    if is_id:
+        return "Vulkan Tidak Ditemukan", (
+            f"⚠️ Game ini membutuhkan Vulkan {need} untuk merender grafis, tetapi Vulkan tidak ditemukan di PC ini.\n"
+            "Biasanya driver kartu grafis belum terpasang, sudah usang, atau masih menggunakan driver bawaan Windows.\n\n"
+            "👉 Solusi:\n"
+            "1. Pasang driver terbaru dari situs resmi NVIDIA, AMD, atau Intel (bukan dari Windows Update).\n"
+            "2. Restart PC, lalu buka kembali launcher.\n\n"
+            f"Jika pesan ini tetap muncul, kartu grafis PC ini kemungkinan belum mendukung Vulkan {need}.\n\n" + run_anyway)
+    return "Vulkan Not Found", (
+        f"⚠️ This game needs Vulkan {need} to show graphics, but Vulkan was not found on this PC.\n"
+        "Usually the graphics driver is not installed, is old, or is still the Windows default driver.\n\n"
+        "👉 Fix:\n"
+        "1. Install the latest driver from the NVIDIA, AMD or Intel website (not from Windows Update).\n"
+        "2. Restart the PC, then open the launcher again.\n\n"
+        f"If this message still appears, this PC's graphics card probably does not support Vulkan {need}, so "
+        "the game cannot run.\n\n" + run_anyWAY if False else
+        f"⚠️ This game needs Vulkan {need} to show graphics, but Vulkan was not found on this PC.\n"
+        "Usually the graphics driver is not installed, is old, or is still the Windows default driver.\n\n"
+        "👉 Fix:\n"
+        "1. Install the latest driver from the NVIDIA, AMD or Intel website (not from Windows Update).\n"
+        "2. Restart the PC, then open the launcher again.\n\n"
+        f"If this message still appears, this PC's graphics card probably does not support Vulkan {need}, so "
+        "the game cannot run.\n\n" + run_anyway)
+
+
+def describe_vulkan(probe):
+    """One line for the crash report: the loader and each GPU's Vulkan version against the requirement."""
+    need = "%d.%d" % VULKAN_REQUIRED
+    if not probe.loaded:
+        return f"not found ({probe.error}); needs {need}"
+    parts = ["loader " + ("%d.%d" % probe.loader if probe.loader else "unknown")]
+    parts += [f"GPU {i} {major}.{minor}" for i, (_, _, (major, minor)) in enumerate(probe.devices)] or [
+        "no GPU" if probe.instance else "no instance"]
+    if probe.error:
+        parts.append(f"probe stopped: {probe.error}")
+    return ", ".join(parts) + f"; needs {need}"
+
+
+def keep_previous_render_trace():
+    if not RENDER_TRACE_LOG.exists():
+        return ""
+    try:
+        os.replace(RENDER_TRACE_LOG, RENDER_TRACE_LOG.with_name("render_trace.previous.log"))
+    except OSError as exc:
+        return f"Previous render_trace.log not kept ({exc.strerror or exc}): this run overwrites it.  "
+    return ""
+
+
+TRACE_SESSION_NAME = re.compile(r"^(\d{8}-\d{6})(?:-(\d+))?$")
+
+
+def new_trace_session(now=None):
+    stamp = (now or datetime.datetime.now()).strftime("%Y%m%d-%H%M%S")
+    RENDER_TRACES.mkdir(parents=True, exist_ok=True)
+    for n in itertools.count(1):
+        folder = RENDER_TRACES / (stamp if n == 1 else f"{stamp}-{n}")
+        try:
+            folder.mkdir()
+        except FileExistsError:
+            continue
+        return folder
+
+
+def latest_trace_session():
+    if not RENDER_TRACES.is_dir():
+        return None
+    sessions = []
+    for path in RENDER_TRACES.iterdir():
+        match = TRACE_SESSION_NAME.match(path.name)
+        if match and path.is_dir():
+            sessions.append(((match.group(1), int(match.group(2) or 1)), path))
+    return max(sessions)[1] if sessions else None
+
+
+def copy_into_trace_session(session, files):
+    failed = []
+    for path in files:
+        if not path.is_file():
+            continue
+        try:
+            shutil.copy2(path, session / path.name)
+        except OSError as exc:
+            failed.append(f"{path.name} ({exc.strerror or exc})")
+    return f"Not saved in render_traces\\{session.name}: {', '.join(failed)}.  " if failed else ""
+
+
+WM_CLOSE = 0x0010
+
+
+def request_window_close(pid):
+    """Post WM_CLOSE to the visible top-level windows of process `pid`, as clicking their X does."""
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    user32.EnumWindows.argtypes = [ctypes.c_void_p, wintypes.LPARAM]
+    user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    user32.IsWindowVisible.argtypes = [wintypes.HWND]
+    user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+    windows = []
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def visit(hwnd, _):
+        owner = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+        if owner.value == pid and user32.IsWindowVisible(hwnd):
+            windows.append(hwnd)
+        return True
+
+    if not user32.EnumWindows(visit, 0):
+        raise ctypes.WinError(ctypes.get_last_error())
+    asked = sum(1 for hwnd in windows if user32.PostMessageW(hwnd, WM_CLOSE, 0, 0))
+    if windows and not asked:
+        raise ctypes.WinError(ctypes.get_last_error())
+    return asked
+
+
+def cpu_name():
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0") as key:
+            return str(winreg.QueryValueEx(key, "ProcessorNameString")[0]).strip()
+    except (ImportError, OSError) as exc:
+        return {"unknown": f"CPU name not readable: {exc}"}
+
+
+def memory_info():
+    try:
+        class MEMORYSTATUSEX(ctypes.Structure):
+            _fields_ = [("dwLength", wintypes.DWORD), ("dwMemoryLoad", wintypes.DWORD),
+                        ("ullTotalPhys", ctypes.c_uint64), ("ullAvailPhys", ctypes.c_uint64),
+                        ("ullTotalPageFile", ctypes.c_uint64), ("ullAvailPageFile", ctypes.c_uint64),
+                        ("ullTotalVirtual", ctypes.c_uint64), ("ullAvailVirtual", ctypes.c_uint64),
+                        ("ullAvailExtendedVirtual", ctypes.c_uint64)]
+        mem = MEMORYSTATUSEX()
+        mem.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+        if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(mem)):
+            raise OSError(f"GlobalMemoryStatusEx failed (error {ctypes.GetLastError()})")
+        mb = 1024 * 1024
+        return {"ram_total_mb": mem.ullTotalPhys // mb, "ram_free_mb": mem.ullAvailPhys // mb,
+                "commit_free_mb": mem.ullAvailPageFile // mb}
+    except (AttributeError, OSError) as exc:
+        return {"memory": {"unknown": f"not readable: {exc}"}}
+
+
+def system_info():
+    return dict({"os": f"{platform.system()} {platform.release()} (build {platform.version()})",
+                 "cpu": cpu_name(), "cpu_id": platform.processor() or {"unknown": "platform.processor() empty"}},
+                **memory_info())
+
+
+def file_sha8(path):
+    try:
+        return file_sha256(path)[:8]
+    except OSError as exc:
+        return {"unknown": f"{Path(path).name}: {exc.strerror or exc}"}
+
+
+def game_info(game):
+    info = {}
+    try:
+        values = parse_sfo((Path(game) / "sce_sys" / "param.sfo").read_bytes()) if parse_sfo else {}
+        info["title_id"] = values.get("TITLE_ID") or {"unknown": "param.sfo has no TITLE_ID"}
+        info["app_ver"] = values.get("APP_VER") or {"unknown": "param.sfo has no APP_VER"}
+    except Exception as exc:
+        reason_str = basara4_report.reason(exc) if basara4_report else str(exc)
+        info["title_id"] = info["app_ver"] = {"unknown": f"param.sfo not readable: {reason_str}"}
+    try:
+        stamp = json.loads(STAMP.read_text(encoding="utf-8-sig"))
+        info["eboot_sha8"] = (stamp.get("eboot_sha256") or "")[:8] or {"unknown": "prepared.json has no hash"}
+    except (OSError, ValueError) as exc:
+        reason_str = basara4_report.reason(exc) if basara4_report else str(exc)
+        info["eboot_sha8"] = {"unknown": f"prepared.json not readable: {reason_str}"}
+    info["folder"] = str(game)
+    return info
+
+
+def gpu_vendor_for_game(probe, gpu_id):
+    index = gpu_id if gpu_id is not None and 0 <= gpu_id < len(probe.drivers) else (0 if probe.drivers else None)
+    if index is None:
+        return "none"
+    vendors = basara4_report.VENDORS if basara4_report else {0x10DE: "NVIDIA", 0x1002: "AMD", 0x8086: "Intel"}
+    return vendors.get(probe.drivers[index][0], f"0x{probe.drivers[index][0]:04X}")
+
+
+def vulkan_info(probe, gpu_id):
+    types = {1: "iGPU", 2: "dGPU", 3: "virtual", 4: "CPU"}
+    vendors = basara4_report.VENDORS if basara4_report else {0x10DE: "NVIDIA", 0x1002: "AMD", 0x8086: "Intel"}
+    gpus = []
+    for i, (name, kind, api) in enumerate(probe.devices):
+        vendor, raw = probe.drivers[i] if i < len(probe.drivers) else (None, None)
+        gpus.append({"index": i, "name": name, "type": types.get(kind, str(kind)), "vulkan": "%d.%d" % api,
+                     "vendor": vendors.get(vendor, f"0x{vendor:04X}" if vendor is not None else None),
+                     "driver": driver_version_text(vendor, raw) if raw is not None else None})
+    return {"summary": describe_vulkan(probe),
+            "loader": "%d.%d" % probe.loader if probe.loader else {"unknown": "loader did not say"},
+            "dll": probe.dll or {"unknown": probe.error or "not loaded"},
+            "dll_version": file_version(probe.dll) if probe.dll else {"unknown": probe.error or "not loaded"},
+            "gpus": gpus,
+            "gpu_for_game": gpu_id if gpu_id is not None else "auto (the game chooses)",
+            "check": vulkan_problem(probe, gpu_id) or "ok",
+            "gpu_vendor_for_game": gpu_vendor_for_game(probe, gpu_id),
+            "probe_error": probe.error or None}
+
+
+def content_info(cfg):
+    try:
+        profile = json.loads((OUT / "content-profile.json").read_text(encoding="utf-8"))
+        dlc = [addon.get("label") for addon in profile.get("mounted_addons", [])]
+    except (OSError, ValueError) as exc:
+        reason_str = basara4_report.reason(exc) if basara4_report else str(exc)
+        dlc = {"unknown": f"content-profile.json not readable: {reason_str}"}
+    return {"dlc": dlc, "cheats": list(cfg.get("cheats", [])), "dlc_dir": cfg.get("dlc_dir")}
+
+
+def session_artifacts(report):
+    return basara4_report.collect_session_artifacts(
+        report, traces_dir=RENDER_TRACES, captures_dir=CAPTURES_DIR, fallback_trace_log=RENDER_TRACE_LOG,
+        audio_log=AUDIO_LOG, run_log=LOG, prepare_log=PREPARE_LOG)
+
+
+def render_trace_report(report=None):
+    if report is not None and basara4_report:
+        art = session_artifacts(report)
+        text = ""
+        if art.trace_log:
+            try:
+                lines = basara4_report.read_text(art.trace_log).splitlines()
+            except OSError as exc:
+                lines = [f"{art.trace_label} could not be read: {exc.strerror or exc}"]
+            if lines:
+                text += (f"\n--- [Render Trace of this session ({art.trace_label}): last {min(12, len(lines))} "
+                         f"of {len(lines)} lines; render_trace.log in this zip has all of them] ---\n"
+                         + "\n".join(lines[-12:]) + "\n")
+        text += "".join(f"\n--- [Not read] {note}\n" for note in art.notes)
+        if art.captures:
+            text += ("\n--- [Captures of this session (captures\\ in this zip)] ---\n"
+                     + "\n".join(f"  - {name}" for name in art.captures) + "\n")
+        return text
+    text = ""
+    try:
+        session = latest_trace_session()
+    except OSError as exc:
+        session = None
+        text += f"\n--- [Recent Render Trace] ---\nuser\\render_traces could not be listed: {exc}\n"
+    log = session / "render_trace.log" if session else RENDER_TRACE_LOG
+    label = f"render_traces\\{session.name}\\render_trace.log" if session else "render_trace.log"
+    if log.is_file():
+        try:
+            lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError as exc:
+            lines = [f"{label} could not be read: {exc}"]
+        if lines:
+            text += f"\n--- [Recent Render Trace ({label})] ---\n" + "\n".join(lines[-12:]) + "\n"
+    if CAPTURES_DIR.is_dir():
+        try:
+            entries = [f"  - {p.name}" for p in sorted(
+                CAPTURES_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)[:6]]
+        except OSError as exc:
+            entries = [f"  user\\captures could not be listed: {exc}"]
+        if entries:
+            text += "\n--- [Recent Captures (user/captures)] ---\n" + "\n".join(entries) + "\n"
+    return text
+
+
+def render_trace_summary(report=None):
+    text = render_trace_report(report).strip("\n")
+    return text or "  (none: Tracer was off in this session, or it left no log or captures)"
+
+
+def report_saved_text(name, lang="en"):
+    if lang == "id":
+        return (f"Laporan sesi berhasil disimpan sebagai {name}.\n"
+                f"Lokasi file: user\\reports\\{name}\n\n"
+                "File tersebut telah disorot di jendela Explorer. Anda dapat melampirkan file .zip ini "
+                "saat membuat laporan bug di GitHub Issues.\n\n"
+                "File ini berisi spesifikasi PC, pengaturan, log sesi, dan tangkapan layar F11 (di bawah 9 MB). "
+                "Nama akun dan folder pribadi Anda telah disamarkan secara otomatis.\n"
+                "File crash dump (.dmp) tetap disimpan di user\\crash dan tidak dimasukkan ke dalam zip demi privasi.")
+    return (f"The report was saved as {name}.\n"
+            f"You can find it next to the launcher in user\\reports\\{name}\n\n"
+            "The file is shown in a folder window. You can attach this .zip file when opening an issue on GitHub.\n\n"
+            "It holds your PC specs, settings, session logs, and F11 captures (kept under 9 MB). "
+            "Your account and folder names are hidden automatically.\n"
+            "The crash dump (.dmp) is not included because it can hold personal data; it stays in user\\crash.")
+
+
+def crash_dialog_geometry(screen_width, screen_height):
+    """(width, height, left, top) of the crash window on a screen of this size (1366x768 & DPI ready)."""
+    width = min(CRASH_DIALOG_SIZE[0], screen_width - SCREEN_KEEP_FREE[0])
+    height = min(CRASH_DIALOG_SIZE[1], screen_height - SCREEN_KEEP_FREE[1])
+    left = max(0, (screen_width - width) // 2)
+    top = max(0, (screen_height - SCREEN_KEEP_FREE[1] - height) // 2)
+    return width, height, left, top
+
+
+VULKAN = probe_vulkan()
+SYSTEM_GPUS = gpu_choices(VULKAN)
 
 DISPLAY_MODES = [("Windowed", "windowed"), ("Borderless fullscreen", "borderless"),
-
                  ("Exclusive fullscreen", "fullscreen")]
 
 FPS_LIMITS = [("60 (game default)", 60), ("90", 90), ("120", 120), ("144", 144), ("165", 165),
-
               ("240", 240), ("Unlimited", 0)]
 
+NATIVE_SIZE = (1920, 1080)
+_RES_SIZES = getattr(basara4_patches, "RESOLUTION_SIZES", {}) if basara4_patches else {}
 RESOLUTIONS = [
-
-    ("1920 x 1080  (1080p Native)", "native"),
-
-    ("1600 x 900  (900p)", "900p"),
-
-    ("1280 x 720  (720p HD)", "720p"),
-
-    ("960 x 540  (540p qHD - Spek Kentang)", "540p"),
-
-    ("854 x 480  (480p SD - Super Kentang)", "480p"),
-
-    ("640 x 360  (360p nHD - Ultra Kentang)", "360p"),
-
-    ("2560 x 1440  (1440p 2K)", "1440p"),
-
-    ("3200 x 1800  (1800p)", "1800p"),
-
-    ("3840 x 2160  (4K UHD)", "4K"),
-
+    (f"{w} x {h}  ({desc})", key)
+    for key, desc in (
+        ("native", "1080p Native"),
+        ("900p", "900p HD+"),
+        ("720p", "720p HD"),
+        ("540p", "540p qHD - Potato Specs"),
+        ("480p", "480p SD - Super Potato"),
+        ("360p", "360p nHD - Ultra Potato"),
+        ("1440p", "1440p 2K"),
+        ("1800p", "1800p QHD+"),
+        ("4K", "4K UHD"),
+    )
+    for w, h in [_RES_SIZES.get(key, NATIVE_SIZE)]
 ]
 
 UPSCALERS = [("Off  (plain scaling)", "off"), ("FSR 1  (sharper)", "fsr1")]
@@ -869,6 +1380,8 @@ CARD_BORDER_GLOW = "#1269D8"
 CARD_BORDER_SUBTLE = "#0D3A73"
 CYAN_HIGHLIGHT = "#58B8FF"      # Cyan highlights matching Masamune's aura
 SAMURAI_GOLD = "#D6A63A"        # Subtle Samurai Gold accents
+GOLD_TEXT = "#E5C168"           # Luxury Gold highlight text
+FIELD_BG = "#040814"            # Deep Midnight input field background
 RED_PRIMARY = "#FF4242"         # Official Basara 4 Crimson Red (from logo '4')
 RED_DARK = "#780B10"
 RED_HOVER = "#FF5E5E"
@@ -907,6 +1420,8 @@ DEFAULTS = {
     "audio_log": False,
 
     "audio_wav": False,
+
+    "render_trace": False,
 
     "gpu_index": -1,
 
@@ -958,6 +1473,12 @@ DEFAULT_LOCALES = {
 
         "stop_btn": "Stop Game",
 
+        "force_stop_btn": "Force Stop",
+
+        "closing_graceful": "Closing the game (flushing logs)... Click 'Force Stop' if it does not close.",
+
+        "running_tracer": "Running, Tracer active (Press F11 at bug, then click Report)…",
+
         "credits_btn": "Credits & Community",
 
         "by_author": "by Timotius",
@@ -990,15 +1511,19 @@ DEFAULT_LOCALES = {
 
         "rcas": "Sharpening (RCAS)",
 
-        "audio_log": "Audio Debug Log",
+        "audio_log": "Tracer",
 
-        "wav_capture": "+ WAV Debug Capture",
+        "tracer_chk": "Tracer",
+
+        "report_btn": "Report (F11)",
+
+        "wav_capture": "+ WAV Capture",
 
         "res_hint": "Game renders internally at 1080p. Window size scales the viewport; FSR 1 enhances clarity on higher resolutions.",
 
         "fps_hint": "FPS limits above 60 disable internal frame limiter. VSync caps rate at monitor refresh.",
 
-        "ingame_menu": "In-game menu: Insert key, or R3 + L2 on gamepad.",
+        "ingame_menu": "In-game menu: Insert key, or R3 + L2 on gamepad. Tracer: press F11 at bug, then Report.",
 
         "section_controller": "CONTROLLER & INPUT",
 
@@ -1072,6 +1597,12 @@ DEFAULT_LOCALES = {
 
         "stop_btn": "Hentikan Game",
 
+        "force_stop_btn": "Paksa Berhenti",
+
+        "closing_graceful": "Menutup game (menyimpan log)... Klik 'Paksa Berhenti' jika tidak menutup.",
+
+        "running_tracer": "Berjalan, Tracer aktif (Tekan F11 saat bug, lalu klik Laporan)…",
+
         "credits_btn": "Kredit & Lisensi",
 
         "by_author": "oleh Timotius",
@@ -1104,15 +1635,19 @@ DEFAULT_LOCALES = {
 
         "rcas": "Ketajaman (RCAS)",
 
-        "audio_log": "Log Debug Audio",
+        "audio_log": "Tracer",
 
-        "wav_capture": "+ Rekam Debug WAV",
+        "tracer_chk": "Tracer",
+
+        "report_btn": "Laporan (F11)",
+
+        "wav_capture": "+ Rekam WAV",
 
         "res_hint": "Game dirender internal pada 1080p. Resolusi jendela mengatur ukuran tampilan; FSR 1 mempertajam pada layar resolusi tinggi.",
 
         "fps_hint": "Batas FPS di atas 60 menonaktifkan limiter bawaan game. Matikan VSync agar tidak dibatasi layar.",
 
-        "ingame_menu": "Menu in-game: Tombol Insert, atau R3 + L2 pada stik.",
+        "ingame_menu": "Menu in-game: Tombol Insert, atau R3 + L2 pada stik. Tracer: tekan F11 saat bug, lalu Laporan.",
 
         "section_controller": "KONTROLER & INPUT",
 
@@ -3333,6 +3868,26 @@ class Launcher(tk.Tk):
 
         self._ui_queue = queue.Queue()
 
+        self.user_stopped = False
+        self._stopped_by_user = False
+        self.close_requested = False
+        self.closing_launcher = False
+        self.stop_note = ""
+        self.trace_session = None
+        self.forced_stop = False
+        self.session_report = None
+        self.last_description = ""
+        self.session_report_path = None
+        self.session_started_at = None
+        self.controller_win = None
+        self._left_scroll_y = 0
+        if basara4_report:
+            try:
+                basara4_report.mark_unfinished(REPORTS)
+                basara4_report.prune(REPORTS)
+            except Exception as e:
+                log_debug(f"Session report init note: {e}")
+
 
 
         self.title(f"{self.t('app_title')} - {BRAND} by {AUTHOR}")
@@ -3410,6 +3965,11 @@ class Launcher(tk.Tk):
         except Exception as e:
 
             log_debug(f"Error building UI layout: {e}\n{traceback.format_exc()}")
+
+        try:
+            self._clean_tracer_files()
+        except Exception as e:
+            log_debug(f"Tracer cleanup note: {e}")
 
 
 
@@ -3555,11 +4115,13 @@ class Launcher(tk.Tk):
             self.play.set_lang(lang)
             self.play.config(text=self.t("play_btn"))
         if hasattr(self, "stop"):
-            self.stop.config(text=self.t("stop_btn"))
+            self.stop.config(text=self.t("force_stop_btn" if getattr(self, "close_requested", False) else "stop_btn"))
         if hasattr(self, "credits_btn"):
             self.credits_btn.config(text=self.t("credits_btn"))
         if hasattr(self, "check_update_btn"):
             self.check_update_btn.config(text="Cek Update" if lang == "id" else "Check Update")
+        if hasattr(self, "btn_report"):
+            self.btn_report.config(text=self.t("report_btn"))
         if hasattr(self, "wm_sub"):
             self.wm_sub.config(text=f"{self.t('by_author')} - v{VERSION}")
             
@@ -3891,6 +4453,30 @@ class Launcher(tk.Tk):
         """No-op: Glass cards are seamlessly baked into self._composited_bg with unbroken 1.5px glowing borders."""
         pass
 
+    def _on_left_mousewheel(self, event):
+        """Scroll left settings column when screen height or High-DPI scaling (125%/150%) makes window < 720px tall."""
+        if not hasattr(self, "main_canvas"):
+            return
+        w = max(self.winfo_width(), 1040)
+        h = max(self.winfo_height(), 480)
+        try:
+            rx = event.x_root - self.winfo_rootx()
+        except Exception:
+            rx = getattr(event, "x", 0)
+        if rx > int(w * 0.62):
+            return
+        max_scroll = max(0, 720 - h)
+        if max_scroll <= 0:
+            if getattr(self, "_left_scroll_y", 0) != 0:
+                self._left_scroll_y = 0
+                self._reposition_elements(w, h)
+            return
+        delta = -40 if getattr(event, "delta", 0) > 0 else 40
+        new_scroll = max(0, min(getattr(self, "_left_scroll_y", 0) + delta, max_scroll))
+        if new_scroll != getattr(self, "_left_scroll_y", 0):
+            self._left_scroll_y = new_scroll
+            self._reposition_elements(w, h)
+
     def _reposition_elements(self, w, h):
         """Precision responsive scaling maintaining 61.2% Left / 38.8% Right split and proportional Y spacing."""
         if not hasattr(self, "main_canvas"):
@@ -3904,10 +4490,15 @@ class Launcher(tk.Tk):
         btn_play_h = int(round(btn_play_w / 4.32524))
         sub_w = (btn_play_w - 10) // 2
 
-        card1_y1 = 62
-        card2_y1 = int(h * 0.21)
-        card3_y1 = int(h * 0.56)
-        card3_y2 = h - 14
+        eff_h = max(h, 720)
+        max_scroll = max(0, 720 - h)
+        self._left_scroll_y = max(0, min(getattr(self, "_left_scroll_y", 0), max_scroll))
+        sy = -self._left_scroll_y
+
+        card1_y1 = 62 + sy
+        card2_y1 = int(eff_h * 0.21) + sy
+        card3_y1 = int(eff_h * 0.56) + sy
+        card3_y2 = eff_h - 14 + sy
         H3 = card3_y2 - card3_y1
 
         # Header Title and Status Pill (Dynamically spaced to prevent overlap)
@@ -3937,26 +4528,27 @@ class Launcher(tk.Tk):
         entry_w = browse_x - 12 - entry_x
 
         if hasattr(self, "_ic_fld_id"):
-            self.main_canvas.coords(self._ic_fld_id, left_card_x1 + 22, 80)
-            self.main_canvas.coords(self._card_game_title_id, left_card_x1 + 38, 80)
-            self.main_canvas.coords(self._game_folder_lbl_id, left_card_x1 + 18, 108)
+            self.main_canvas.coords(self._ic_fld_id, left_card_x1 + 22, 80 + sy)
+            self.main_canvas.coords(self._card_game_title_id, left_card_x1 + 38, 80 + sy)
+            self.main_canvas.coords(self._game_folder_lbl_id, left_card_x1 + 18, 108 + sy)
 
         if hasattr(self, "_game_entry_win"):
-            self.main_canvas.coords(self._game_entry_win, entry_x, 94)
+            self.main_canvas.coords(self._game_entry_win, entry_x, 94 + sy)
             self.main_canvas.itemconfigure(self._game_entry_win, width=entry_w, height=browse_h)
 
         if hasattr(self, "browse_btn") and hasattr(self.browse_btn, "item_id"):
-            self.browse_btn.set_geometry(browse_x + browse_w // 2, 108, browse_w, browse_h)
+            self.browse_btn.set_geometry(browse_x + browse_w // 2, 108 + sy, browse_w, browse_h)
 
         if hasattr(self, "_image_label_id"):
-            self.main_canvas.coords(self._image_label_id, entry_x, 131)
+            self.main_canvas.coords(self._image_label_id, entry_x, 131 + sy)
+            self.main_canvas.itemconfigure(self._image_label_id, width=max(200, left_card_x2 - 18 - entry_x))
 
         # Floating Crimson Warning Banner (Below Card 1 status text)
         if hasattr(self, "_toast_item_id"):
             toast_w = max(380, browse_x + browse_w - entry_x)
             self._toast_photo = self._render_floating_banner(toast_w)
             self.main_canvas.itemconfigure(self._toast_item_id, image=self._toast_photo)
-            self.main_canvas.coords(self._toast_item_id, entry_x, 153)
+            self.main_canvas.coords(self._toast_item_id, entry_x, 153 + sy)
 
         # Card 2 (DISPLAY & GRAPHICS)
         if hasattr(self, "_ic_disp_id"):
@@ -3997,18 +4589,21 @@ class Launcher(tk.Tk):
             self.main_canvas.coords(self._up_combo_win, col2_start + 98, card2_y1 + 127)
             self.main_canvas.itemconfigure(self._up_combo_win, width=(left_card_x2 - 18) - (col2_start + 98))
 
-        # Proportional checkboxes placement
-        chk_offsets = [0, int(card_inner_w * 0.16), int(card_inner_w * 0.41), int(card_inner_w * 0.67)]
+        # Proportional checkboxes + Report button placement
+        chk_offsets = [0, int(card_inner_w * 0.14), int(card_inner_w * 0.40), int(card_inner_w * 0.54)]
         if hasattr(self, "chk_vsync"):
             chk_items = [
                 (self.chk_vsync, self.t("vsync")),
                 (self.chk_rcas, self.t("rcas")),
-                (self.chk_audio, self.t("audio_log")),
+                (self.chk_audio, self.t("tracer_chk")),
                 (self.chk_wav, self.t("wav_capture"))
             ]
             for idx, (chk, txt) in enumerate(chk_items):
                 chk.config(text=txt)
                 chk.set_position(left_card_x1 + 18 + chk_offsets[idx], card2_y1 + 176)
+        if hasattr(self, "btn_report") and hasattr(self.btn_report, "item_id"):
+            rep_w = 104
+            self.btn_report.set_geometry(left_card_x2 - 18 - rep_w // 2, card2_y1 + 176, rep_w, 24)
 
         max_hint_w = (left_card_x2 - left_card_x1) - 40
         if hasattr(self, "_res_hint_id"):
@@ -4290,14 +4885,19 @@ class Launcher(tk.Tk):
 
         self.vsync_var = tk.BooleanVar(value=self.cfg.get("vsync", False))
         self.rcas_var = tk.BooleanVar(value=self.cfg.get("rcas", True))
-        self.audio_var = tk.BooleanVar(value=self.cfg.get("audio_log", False))
+        self.tracer_var = tk.BooleanVar(value=bool(self.cfg.get("render_trace") or self.cfg.get("audio_log", False)))
+        self.audio_var = self.tracer_var
         self.wav_var = tk.BooleanVar(value=False)
 
-        chk_offsets = [0, int(card_inner_w * 0.16), int(card_inner_w * 0.41), int(card_inner_w * 0.67)]
+        chk_offsets = [0, int(card_inner_w * 0.14), int(card_inner_w * 0.40), int(card_inner_w * 0.54)]
         self.chk_vsync = CanvasCheckbox(self.main_canvas, left_card_x1 + 18 + chk_offsets[0], card2_y1 + 176, self.t("vsync"), self.vsync_var, self._sprites)
         self.chk_rcas = CanvasCheckbox(self.main_canvas, left_card_x1 + 18 + chk_offsets[1], card2_y1 + 176, self.t("rcas"), self.rcas_var, self._sprites)
-        self.chk_audio = CanvasCheckbox(self.main_canvas, left_card_x1 + 18 + chk_offsets[2], card2_y1 + 176, self.t("audio_log"), self.audio_var, self._sprites, command=self._audio_toggled)
+        self.chk_audio = CanvasCheckbox(self.main_canvas, left_card_x1 + 18 + chk_offsets[2], card2_y1 + 176, self.t("tracer_chk"), self.tracer_var, self._sprites, command=self._tracer_toggled)
+        self.chk_tracer = self.chk_audio
         self.chk_wav = CanvasCheckbox(self.main_canvas, left_card_x1 + 18 + chk_offsets[3], card2_y1 + 176, self.t("wav_capture"), self.wav_var, self._sprites, command=self._wav_toggled)
+        rep_w = 104
+        self.btn_report = CanvasButton(self.main_canvas, left_card_x2 - 18 - rep_w // 2, card2_y1 + 176, rep_w, 24,
+                                       text=self.t("report_btn"), command=self.on_report, icon_img=self._icons["doc"], lang=self.lang)
 
         max_hint_w = (left_card_x2 - left_card_x1) - 40
         self._res_hint_id = self.main_canvas.create_text(
@@ -4475,6 +5075,7 @@ class Launcher(tk.Tk):
         self._breathe_phase = 0.0
         self._start_ambient_breathing()
         self.bind("<Configure>", self._on_configure)
+        self.bind("<MouseWheel>", self._on_left_mousewheel, add="+")
 
     def _start_ambient_breathing(self):
         """Low-cost ambient breathing timer (50ms) gently pulsing status dot and Play Game aura."""
@@ -4612,7 +5213,7 @@ class Launcher(tk.Tk):
 
         self.input_mode_var.set(self.cfg.get("input_mode", "controller"))
 
-        self.audio_var.set(self.cfg.get("audio_log", False))
+        self.tracer_var.set(bool(self.cfg.get("render_trace") or self.cfg.get("audio_log", False)))
 
         self.wav_var.set(False)
 
@@ -4640,7 +5241,7 @@ class Launcher(tk.Tk):
 
         for chk, var in [(getattr(self, "chk_vsync", None), getattr(self, "vsync_var", None)),
                          (getattr(self, "chk_rcas", None), getattr(self, "rcas_var", None)),
-                         (getattr(self, "chk_audio", None), getattr(self, "audio_var", None)),
+                         (getattr(self, "chk_audio", None), getattr(self, "tracer_var", None)),
                          (getattr(self, "chk_wav", None), getattr(self, "wav_var", None))]:
             if chk and var:
                 try:
@@ -4702,29 +5303,20 @@ class Launcher(tk.Tk):
             except Exception:
                 pass
 
-    def _audio_toggled(self):
-
-        if not self.audio_var.get():
-
+    def _tracer_toggled(self):
+        if not self.tracer_var.get():
             self.wav_var.set(False)
 
-
+    def _audio_toggled(self):
+        self._tracer_toggled()
 
     def _wav_toggled(self):
-
         if not self.wav_var.get():
-
             return
-
         if messagebox.askyesno(self.t("wav_capture"), WAV_WARNING, icon="warning", default="no", parent=self):
-
-            self.audio_var.set(True)
-
+            self.tracer_var.set(True)
         else:
-
             self.wav_var.set(False)
-
-
 
     def _check_wav_leftovers(self):
 
@@ -4758,6 +5350,8 @@ class Launcher(tk.Tk):
 
         selected_gpu_idx = next((idx for idx, name, _ in SYSTEM_GPUS if name == selected_gpu_name), -1)
 
+        tracer_on = bool(self.tracer_var.get())
+
         self.cfg.update(
 
             game=self.game_var.get().strip(), display_mode=self.mode_var.get(), vsync=self.vsync_var.get(),
@@ -4766,9 +5360,11 @@ class Launcher(tk.Tk):
 
             resolution=dict(RESOLUTIONS)[self.res_var.get()], upscale=dict(UPSCALERS)[self.up_var.get()],
 
-            anisotropy=dict(ANISO)[self.aniso_var.get()], audio_log=self.audio_var.get(),
+            anisotropy=dict(ANISO)[self.aniso_var.get()], audio_log=tracer_on,
 
-            audio_wav=self.audio_var.get() and self.wav_var.get(),
+            render_trace=tracer_on,
+
+            audio_wav=tracer_on and self.wav_var.get(),
 
             gpu_index=selected_gpu_idx,
 
@@ -4786,7 +5382,9 @@ class Launcher(tk.Tk):
 
             "anisotropy": self.cfg["anisotropy"], "render_resolution": self.cfg["resolution"],
 
-            "fsr1": int(self.cfg["upscale"] == "fsr1"),
+            "fsr1": int(self.cfg["upscale"] == "fsr1"), "upscaler": "off",
+
+            "jitter": 0, "object_motion": 0,
 
             "gpu_id": self.cfg.get("gpu_index", -1),
 
@@ -4846,37 +5444,41 @@ class Launcher(tk.Tk):
 
         env["DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1"] = "1"
 
+        env["SPARTAN_FILE_TRACE"] = "1"
 
 
-        gpu_idx = self.cfg.get("gpu_index", -1)
 
-        if gpu_idx != -1:
+        gpu_id = game_gpu_id(self.cfg.get("gpu_index", -1), SYSTEM_GPUS)
 
-            env["SPARTAN_GPU_ID"] = str(gpu_idx)
+        if gpu_id is not None:
+
+            env["SPARTAN_GPU_ID"] = str(gpu_id)
 
         else:
 
-            disc_idx = next((idx for idx, _, is_disc in SYSTEM_GPUS if is_disc and idx >= 0), None)
-
-            if disc_idx is not None:
-
-                env["SPARTAN_GPU_ID"] = str(disc_idx)
-
-            else:
-
-                env.pop("SPARTAN_GPU_ID", None)
+            env.pop("SPARTAN_GPU_ID", None)
 
 
+
+        res = self.cfg.get("resolution", "native")
 
         avail_mb = check_commit_limit_mb()
 
-        if avail_mb is not None and avail_mb < 3200:
+        if res in ("1440p", "1800p", "4K"):
+
+            env["SPARTAN_DMEM_MB"] = "4800"
+
+        elif avail_mb is not None and avail_mb < 3200:
 
             env["SPARTAN_DMEM_MB"] = "2048"
 
         elif avail_mb is not None and avail_mb < 4608:
 
             env["SPARTAN_DMEM_MB"] = "2560"
+
+        else:
+
+            env.pop("SPARTAN_DMEM_MB", None)
 
 
 
@@ -4918,6 +5520,10 @@ class Launcher(tk.Tk):
 
         env["SPARTAN_DIRECT_MEMORY_ACCESS"] = "1"
 
+        env["SPARTAN_UPSCALER"] = "off"
+
+        env["SPARTAN_OBJECT_MOTION"] = "0"
+
 
 
         # Decoupled low-latency audio driver configuration
@@ -4933,6 +5539,20 @@ class Launcher(tk.Tk):
         if self.cfg.get("audio_log") and self.cfg.get("audio_wav"):
 
             env["SPARTAN_AUDIO_WAV_DIR"] = str(AUDIO_WAV)
+
+        if self.cfg.get("render_trace"):
+
+            session = getattr(self, "trace_session", None)
+
+            env["SPARTAN_RENDER_TRACE"] = str(session / "render_trace.log" if session else RENDER_TRACE_LOG)
+
+            env["SPARTAN_FRAME_CAPTURE_KEY"] = "1"
+
+        else:
+
+            env.pop("SPARTAN_RENDER_TRACE", None)
+
+            env.pop("SPARTAN_FRAME_CAPTURE_KEY", None)
 
 
 
@@ -4980,25 +5600,16 @@ class Launcher(tk.Tk):
 
 
 
-        res = self.cfg.get("resolution", "native")
+        res_map = getattr(basara4_patches, "RESOLUTION_SIZES", {
+            "360p": (640, 360), "480p": (860, 480), "540p": (960, 540),
+            "720p": (1280, 720), "900p": (1600, 900), "native": NATIVE_SIZE,
+        })
 
-        sub_1080p_map = {
+        w, h = res_map.get(res, NATIVE_SIZE)
 
-            "360p": "640x360",
+        if w < NATIVE_SIZE[0] and h < NATIVE_SIZE[1]:
 
-            "480p": "854x480",
-
-            "540p": "960x540",
-
-            "720p": "1280x720",
-
-            "900p": "1600x900",
-
-        }
-
-        if res in sub_1080p_map:
-
-            env["SPARTAN_RENDER_RES"] = sub_1080p_map[res]
+            env["SPARTAN_RENDER_RES"] = f"{w}x{h}"
 
         else:
 
@@ -5017,6 +5628,16 @@ class Launcher(tk.Tk):
         if self.busy or self.proc:
 
             return
+
+        self.user_stopped = False
+
+        self._stopped_by_user = False
+
+        self.close_requested = False
+
+        self.forced_stop = False
+
+        self.stop_note = ""
 
         self._collect()
 
@@ -5042,13 +5663,29 @@ class Launcher(tk.Tk):
 
 
 
+        gpu_id = game_gpu_id(self.cfg.get("gpu_index", -1), SYSTEM_GPUS)
+
+        problem = vulkan_problem(VULKAN, gpu_id)
+
+        if problem:
+
+            self._deiconify()
+
+            title, message = vulkan_warning(problem, VULKAN, gpu_id, self.lang)
+
+            if not messagebox.askyesno(title, message, icon="warning", default="no", parent=self):
+
+                return
+
+
+
         avail_mb = check_commit_limit_mb()
 
         if avail_mb is not None and avail_mb < 2560:
 
             if not messagebox.askyesno(
 
-                "Virtual Memory Sangat Rendah",
+                "Virtual Memory Sangat Rendah" if self.lang == "id" else "Very Low Virtual Memory",
 
                 f"Sisa alokasi memori virtual Windows Anda hanya ~{avail_mb} MB.\n"
 
@@ -5056,15 +5693,18 @@ class Launcher(tk.Tk):
 
                 "Jika game crash dengan Error 1455, pastikan Virtual Memory (Paging File) aktif di Windows.\n\n"
 
-                "Tetap jalankan game?"):
+                "Tetap jalankan game?" if self.lang == "id" else (
+                    f"Your remaining Windows virtual memory commit space is only ~{avail_mb} MB.\n"
+                    "The game requires at least ~3584 MB (3.5 GB) of virtual memory.\n\n"
+                    "If the game crashes with Error 1455, enable the Windows Paging File.\n\n"
+                    "Start the game anyway?"
+                )):
 
                 return
 
 
 
         self.busy = True
-
-        self._stopped_by_user = False
 
         self.play.config(state="disabled")
 
@@ -5152,29 +5792,17 @@ class Launcher(tk.Tk):
 
 
 
-            # 3. Audio runtime binary patches (D & E)
-
-            if basara4_patches and hasattr(basara4_patches, "patch_audio_runtime"):
-
-                try:
-
-                    ok, note = basara4_patches.patch_audio_runtime(exe)
-
-                    log_launch(f"Audio runtime patch: {note}")
-
-                except Exception as e:
-
-                    log_launch(f"Audio patch warning: {e}\n{traceback.format_exc()}")
-
-
-
-            # 4. Patches: Frame limiter & GoldHEN Cheats
+            # 3. Patches: Frame limiter, Resolution e2d_node_pos & GoldHEN Cheats
 
             selected_cheats = self.cfg.get("cheats", [])
 
+            chosen_res = self.cfg.get("resolution", "native")
+
             patch_args, notice = [], ""
 
-            if (self.cfg["fps_limit"] != 60 or selected_cheats) and basara4_patches:
+            self.active_patches = []
+
+            if (self.cfg["fps_limit"] != 60 or selected_cheats or chosen_res != "native") and basara4_patches:
 
                 try:
 
@@ -5184,7 +5812,9 @@ class Launcher(tk.Tk):
 
                         OUT / "eboot.elf", OUT / "patches.bin", self.cfg["fps_limit"] != 60,
 
-                        core_path=exe, cheats=selected_cheats, game_version=version)
+                        cheats=selected_cheats, game_version=version, resolution=chosen_res)
+
+                    self.active_patches = list(notes)
 
                     if writes:
 
@@ -5206,7 +5836,7 @@ class Launcher(tk.Tk):
 
 
 
-            # 5. Window icon & Audio logs
+            # 4. Window icon, Audio logs & Tracer session
 
             USER.mkdir(parents=True, exist_ok=True)
 
@@ -5221,6 +5851,16 @@ class Launcher(tk.Tk):
                 except OSError:
 
                     pass
+
+            self.trace_session = None
+
+            if self.cfg.get("render_trace"):
+
+                keep_previous_render_trace()
+
+                self.trace_session = new_trace_session()
+
+                copy_into_trace_session(self.trace_session, [CONFIG, self._ini()])
 
 
 
@@ -5240,7 +5880,7 @@ class Launcher(tk.Tk):
 
 
 
-            # 6. Language assets & extra arguments
+            # 5. Language assets & extra arguments
 
             mount_args = self._sync_language_assets()
 
@@ -5258,7 +5898,9 @@ class Launcher(tk.Tk):
 
 
 
-            # 7. Open log file
+            # 6. Start Session Report & Open log file
+
+            notice += self._start_session_report(game)
 
             try:
 
@@ -5274,7 +5916,7 @@ class Launcher(tk.Tk):
 
 
 
-            # 8. Construct command and spawn process
+            # 7. Construct command and spawn process
 
             cmd = [
 
@@ -5346,7 +5988,7 @@ class Launcher(tk.Tk):
 
 
 
-            # 9. Active 8-second watchdog monitor
+            # 8. Active 8-second watchdog monitor
 
             watchdog_deadline = time.time() + 8.0
 
@@ -5400,9 +6042,13 @@ class Launcher(tk.Tk):
 
     def _on_process_spawned(self, notice):
 
-        self.stop.config(state="normal")
+        self.stop.is_primary = False
 
-        self.status.config(text=notice + (self.t("running_audio") if self.cfg.get("audio_log") else self.t("running")))
+        self.stop.config(state="normal", text=self.t("stop_btn"))
+
+        tracer_on = self.cfg.get("render_trace") or self.cfg.get("audio_log")
+
+        self.status.config(text=notice + (self.t("running_tracer") if tracer_on else self.t("running")))
 
         if hasattr(self, "header_status_pill"):
 
@@ -5424,7 +6070,9 @@ class Launcher(tk.Tk):
 
         self.play.config(state="normal")
 
-        self.stop.config(state="disabled")
+        self.stop.is_primary = False
+
+        self.stop.config(state="disabled", text=self.t("stop_btn"))
 
         self._deiconify()
 
@@ -5440,11 +6088,19 @@ class Launcher(tk.Tk):
 
     def _on_launch_crashed_early(self, code, tail):
 
+        self.proc = None
+
         self.busy = False
 
         self.play.config(state="normal")
 
-        self.stop.config(state="disabled")
+        self.stop.is_primary = False
+
+        self.stop.config(state="disabled", text=self.t("stop_btn"))
+
+        self._finish_session_report(code)
+
+        self._finish_trace_session()
 
         self._deiconify()
 
@@ -6121,237 +6777,504 @@ class Launcher(tk.Tk):
 
 
 
-    # ---- Crash Diagnostic Dialog ----
+    # ---- Session Reports, Tracer & Crash Diagnostic Dialog ----
+
+    def _masker(self):
+        if not basara4_report:
+            return None
+        return basara4_report.Masker.from_environment(
+            game_dir=self.cfg.get("game") or None, app_dir=ROOT,
+            folders=basara4_report.user_folders(self.cfg, ROOT))
+
+    def _write_session_report(self):
+        if not basara4_report or not self.session_report or not getattr(self, "session_report_path", None):
+            return
+        masker = self._masker()
+        report = self.session_report
+        basara4_report.write_atomic(
+            self.session_report_path,
+            json.dumps(masker.data(report), indent=2, ensure_ascii=False))
+        basara4_report.write_atomic(
+            self.session_report_path.with_suffix(".txt"),
+            masker(basara4_report.render_text(report, getattr(self, "session_tail", None))))
+
+    @staticmethod
+    def _collected(what, collect, errors):
+        try:
+            return collect()
+        except Exception as exc:
+            errors.append(f"{what}: {basara4_report.reason(exc)}")
+            return basara4_report.unknown(basara4_report.reason(exc))
+
+    def _clean_tracer_files(self):
+        if not basara4_report:
+            return
+        if self.proc is not None and self.proc.poll() is None:
+            return
+        try:
+            result = basara4_report.clean_tracer_files(REPORTS, CAPTURES_DIR, RENDER_TRACES)
+            text = result.summary()
+        except Exception as exc:
+            text = f"Tracer cleanup stopped: {basara4_report.reason(exc)}."
+        if text and hasattr(self, "status"):
+            self.status.config(text=text)
+
+    def _start_session_report(self, game):
+        if not basara4_report:
+            return ""
+        now = datetime.datetime.now()
+        self.session_started_at = now.timestamp()
+        self.session_tail = None
+        self.session_report = None
+        errors = []
+        try:
+            gpu_id = game_gpu_id(self.cfg.get("gpu_index", -1), SYSTEM_GPUS)
+
+            def settings():
+                values = {key: value for key, value in self.cfg.items() if key != "keymap"}
+                values["keymap_custom"] = bool(self.cfg.get("keymap"))
+                res_sizes = getattr(basara4_patches, "RESOLUTION_SIZES", {}) if basara4_patches else {}
+                values["render_size"] = "%dx%d" % res_sizes.get(self.cfg.get("resolution"), NATIVE_SIZE)
+                values["ini"] = read_ini(self._ini())
+                return values
+
+            part = self._collected
+            self.session_report = basara4_report.new_report(
+                now.isoformat(timespec="seconds"),
+                part("launcher", lambda: {"version": VERSION, "author": AUTHOR, "core_sha8": file_sha8(CORE), "frozen": FROZEN}, errors),
+                part("game", lambda: game_info(game), errors),
+                part("system", system_info, errors),
+                part("vulkan", lambda: vulkan_info(VULKAN, gpu_id), errors),
+                part("settings", settings, errors),
+                part("content", lambda: content_info(self.cfg), errors))
+            self.session_report["collect_errors"] = errors
+            self.session_report["tracer"] = {
+                "on": bool(self.cfg.get("render_trace") or self.cfg.get("audio_log")),
+                "trace_folder": self.trace_session.name if self.trace_session else None,
+                "audio_log": bool(self.cfg.get("audio_log")),
+                "started_epoch": now.timestamp(),
+            }
+            name, n = f"session-{now:%Y%m%d-%H%M%S}", 1
+            while (REPORTS / f"{name}.json").exists():
+                n += 1
+                name = f"session-{now:%Y%m%d-%H%M%S}-{n}"
+            self.session_report_path = REPORTS / f"{name}.json"
+            self._write_session_report()
+            basara4_report.prune(REPORTS)
+        except Exception as exc:
+            return f"Session report not written ({basara4_report.reason(exc)}).  "
+        return ""
+
+    def _finish_session_report(self, code):
+        if not basara4_report:
+            return
+        report, self.session_report = self.session_report, None
+        if report is None or report.get("status") != "started":
+            self.session_report = report
+            return
+        user_stopped = bool(self.user_stopped or getattr(self, "_stopped_by_user", False))
+        crashed = isinstance(code, int) and code != 0 and not user_stopped
+        try:
+            try:
+                lines = LOG.read_text(encoding="utf-8", errors="replace").splitlines()
+            except OSError:
+                lines = None
+            hints = []
+            if crashed:
+                data = extract_crash_summary(LOG)
+                hints = explain_hardware_crash(code, data["detected_errors"], data["tail_context"], self.lang)
+            vendor = (report.get("vulkan") or {}).get("gpu_vendor_for_game", "none")
+            self.session_report = basara4_report.finish_report(
+                report, code, user_stopped, self.forced_stop, lines, hints, vendor)
+            self.session_tail = basara4_report.tail_without_trace(lines or [], 10)
+        except Exception as exc:
+            why = basara4_report.reason(exc)
+            self.session_report = dict(
+                report, status="finished", log=basara4_report.unknown(f"report not completed: {why}"),
+                end={"exit_code": code, "stopped_by_user": user_stopped,
+                     "forced": bool(self.forced_stop), "crashed": crashed},
+                collect_errors=list(report.get("collect_errors") or []) + [f"finish: {why}"])
+            self.session_tail = None
+            self.stop_note = (self.stop_note + f" Session report incomplete ({why}).").strip()
+        self.session_report["tracer"] = dict(
+            self.session_report.get("tracer") or {},
+            ended_epoch=datetime.datetime.now().timestamp())
+        try:
+            self._write_session_report()
+            if crashed:
+                stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+                basara4_report.write_atomic(
+                    CRASH_DIR / f"report-{stamp}.txt",
+                    self._masker()(basara4_report.render_text(self.session_report, self.session_tail)))
+        except Exception as exc:
+            self.stop_note = (self.stop_note + f" Session report not saved ({basara4_report.reason(exc)}).").strip()
+
+    def _newest_since(self, folder, pattern):
+        since = (getattr(self, "session_started_at", None) or 0) - 2
+        try:
+            files = [p for p in Path(folder).glob(pattern) if p.is_file() and p.stat().st_mtime >= since]
+        except OSError:
+            return None
+        return max(files, key=lambda p: p.stat().st_mtime) if files else None
+
+    @staticmethod
+    def _last_session_report():
+        try:
+            paths = sorted(REPORTS.glob("session-*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        except OSError:
+            return None
+        for path in paths:
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if isinstance(data, dict) and "schema" in data:
+                return data
+        return None
+
+    def send_report(self, parent=None, description=None):
+        owner = parent or self
+        if not basara4_report:
+            messagebox.showerror(self.t("report_btn"), "basara4_report.py is missing from launcher\\.", parent=owner)
+            return None
+        report = (self.session_report or self._last_session_report()
+                  or basara4_report.unknown("no game session in this launcher run"))
+        if not isinstance(report, dict) or "schema" not in report:
+            errors = []
+            report = {
+                "schema": basara4_report.SCHEMA, "status": "no-session", "note": report,
+                "launcher": {"version": VERSION, "author": AUTHOR},
+                "system": self._collected("system", system_info, errors),
+                "vulkan": self._collected("vulkan", lambda: vulkan_info(
+                    VULKAN, game_gpu_id(self.cfg.get("gpu_index", -1), SYSTEM_GPUS)), errors),
+                "collect_errors": errors,
+            }
+        report = dict(report)
+        note = basara4_report.clean_note(description)
+        report["user_note"] = note
+        log = report.get("log") if isinstance(report.get("log"), dict) else {}
+        dump = Path(log["crash_dump"]) if log.get("crash_dump") else None
+        if dump is None or not dump.is_file():
+            dump = self._newest_since(CRASH_DIR, "*.dmp")
+        withheld = []
+        if dump:
+            try:
+                size = dump.stat().st_size
+            except OSError as exc:
+                size = basara4_report.unknown(basara4_report.reason(exc))
+            report["crash_dump_kept_on_pc"] = {"file": dump.name, "bytes": size, "folder": "user\\crash"}
+            withheld.append(
+                f"crash/{dump.name} ({size} bytes): kept on the PC, not included because it can hold personal data")
+        art = session_artifacts(report)
+        withheld += art.notes
+        target = REPORTS / f"report-{datetime.datetime.now():%Y%m%d-%H%M%S}.zip"
+        try:
+            basara4_report.make_zip(
+                target, report,
+                basara4_report.render_text(
+                    report, getattr(self, "session_tail", None),
+                    sections=[("Render trace", render_trace_summary(report))]),
+                self._masker(), logs=art.logs, binaries=art.binaries, withheld=withheld,
+                max_total_bytes=basara4_report.ZIP_BUDGET_BYTES, priority=art.priority or 1)
+        except basara4_report.PrivacyError as exc:
+            self.last_description = note.get("text", "")
+            hint = ("\n\nIf your name is in what you typed in the description, take it out and try again."
+                    if note.get("text") else "")
+            messagebox.showerror(
+                "Report not saved",
+                f"The report was not saved: {exc}.{hint}\n\nNothing was written, and nothing leaves your PC.",
+                parent=owner)
+            return None
+        except OSError as exc:
+            messagebox.showerror(
+                "Report not saved",
+                f"The report could not be saved in the user\\reports folder.\n\n{exc.strerror or exc}",
+                parent=owner)
+            return None
+        self.last_description = ""
+        shown = self.show_report_file(target, owner)
+        self._show_report_saved(target, owner, file_shown=shown)
+        return target
+
+    def on_report(self):
+        text = self.ask_description()
+        if text is None:
+            return
+        self.config(cursor="watch")
+        self.update_idletasks()
+        try:
+            self.send_report(description=text)
+        finally:
+            self.config(cursor="")
+
+    def ask_description(self):
+        open_window = getattr(self, "describe_window", None)
+        if open_window is not None and open_window.winfo_exists():
+            open_window.lift()
+            return None
+        win = self._describe_window()
+        self.describe_window = win
+        self.wait_window(win)
+        self.describe_window = None
+        return win.result
+
+    def _describe_window(self):
+        win = tk.Toplevel(self)
+        win.title(f"{BRAND} — Report (F11)" if self.lang != "id" else f"{BRAND} — Laporan (F11)")
+        self._apply_window_icon(win)
+        apply_dark_titlebar(win)
+        win.configure(bg=ROOT_BG)
+        win.geometry("600x410")
+        win.minsize(500, 340)
+        win.transient(self)
+        win.result = None
+
+        bar = tk.Frame(win, bg=ROOT_BG, padx=14, pady=12)
+        bar.pack(side="bottom", fill="x")
+        body = tk.Frame(win, bg=CARD_BG, highlightbackground=CARD_BORDER, highlightthickness=1, padx=16, pady=14)
+        body.pack(side="top", fill="both", expand=True, padx=14, pady=(14, 4))
+
+        title_txt = ("Apa yang terjadi dan tombol apa yang Anda tekan? (opsional)"
+                     if self.lang == "id" else "What did you see, and what did you press? (optional)")
+        tk.Label(body, text=title_txt, bg=CARD_BG, fg=CRIMSON_HEADER, font=("Segoe UI Bold", 11)).pack(anchor="w")
+        note = (
+            ("Jelaskan singkat apa yang terjadi. Nama akun Windows dan folder pribadi Anda akan disamarkan secara otomatis. "
+             "Jika Anda menekan F11 di dalam game, tangkapan layar F11 akan otomatis disertakan ke dalam zip.")
+            if self.lang == "id" else
+            ("Say what went wrong and which buttons or keys you pressed. Your account name and PC name are hidden automatically. "
+             "If you pressed F11 in-game on the broken frame, the screenshot is included automatically.")
+        )
+        tk.Label(body, text=note, bg=CARD_BG, fg=FG, font=("Segoe UI", 9),
+                 wraplength=540, justify="left").pack(anchor="w", pady=(6, 10))
+        txt = tk.Text(body, height=6, bg="#040814", fg="#FFE4E6", insertbackground="#FF4242",
+                      relief="flat", wrap="word", font=("Segoe UI", 10), padx=10, pady=8,
+                      highlightthickness=1, highlightbackground="#1E3A6E", undo=True)
+        txt.pack(fill="both", expand=True)
+        counter = tk.Label(body, text="", bg=CARD_BG, fg=GOLD_TEXT, font=("Consolas", 8))
+        counter.pack(anchor="e", pady=(2, 0))
+        win.text, win.counter = txt, counter
+
+        max_chars = getattr(basara4_report, "NOTE_MAX_CHARS", 2000)
+
+        def changed(_event=None):
+            if not txt.edit_modified():
+                return
+            txt.edit_modified(False)
+            over = len(txt.get("1.0", "end-1c")) - max_chars
+            if over > 0:
+                txt.delete(f"end-1c-{over}c", "end-1c")
+            counter.config(text=f"{len(txt.get('1.0', 'end-1c'))} / {max_chars}")
+
+        txt.bind("<<Modified>>", changed)
+        if getattr(self, "last_description", ""):
+            txt.insert("1.0", self.last_description)
+        txt.edit_modified(True)
+        changed()
+
+        def finish(value):
+            win.result = value
+            win.destroy()
+
+        ModernButton(bar, text="Buat Zip Laporan" if self.lang == "id" else "Make Report",
+                     command=lambda: finish(txt.get("1.0", "end-1c")),
+                     is_primary=True, width=170, height=34).pack(side="left", padx=(0, 8))
+        ModernButton(bar, text="Batal" if self.lang == "id" else "Cancel",
+                     command=lambda: finish(None),
+                     is_primary=False, width=100, height=34).pack(side="right")
+        win.protocol("WM_DELETE_WINDOW", lambda: finish(None))
+        win.bind("<Escape>", lambda _e: finish(None))
+        win.lift()
+        win.focus_force()
+        txt.focus_set()
+        win.grab_set()
+        return win
+
+    def show_report_file(self, target, parent=None):
+        try:
+            subprocess.Popen(f'explorer.exe /select,"{target}"', creationflags=NO_WINDOW)
+            return True
+        except OSError:
+            pass
+        try:
+            os.startfile(REPORTS)
+            return True
+        except OSError as exc:
+            messagebox.showerror(
+                "Folder not opened",
+                f"Open it yourself: user\\reports\\{target.name}\n\n{exc.strerror or exc}",
+                parent=parent or self)
+            return False
+
+    def _show_report_saved(self, target, parent, file_shown=True):
+        win = tk.Toplevel(parent)
+        win.title("Laporan Disimpan" if self.lang == "id" else "Report Saved")
+        self._apply_window_icon(win)
+        apply_dark_titlebar(win)
+        win.configure(bg=ROOT_BG)
+        win.geometry("580x360")
+        win.minsize(500, 320)
+        win.transient(parent)
+        win.file_shown = file_shown
+
+        bar = tk.Frame(win, bg=ROOT_BG, padx=14, pady=12)
+        bar.pack(side="bottom", fill="x")
+        body = tk.Frame(win, bg=CARD_BG, highlightbackground=CARD_BORDER, highlightthickness=1, padx=16, pady=14)
+        body.pack(side="top", fill="both", expand=True, padx=14, pady=(14, 4))
+
+        tk.Label(body, text="📦 Zip Laporan Siap" if self.lang == "id" else "📦 Report Zip Ready",
+                 bg=CARD_BG, fg=GOLD_TEXT, font=("Segoe UI Bold", 12)).pack(anchor="w")
+        tk.Label(body, text=report_saved_text(target.name, self.lang), bg=CARD_BG, fg=FG,
+                 font=("Segoe UI", 9), wraplength=520, justify="left").pack(anchor="w", pady=(8, 4))
+
+        def open_github_pressed():
+            win.attributes("-topmost", False)
+            win.file_shown = self.open_bug_report(target, win, show_file=not win.file_shown) or win.file_shown
+
+        ModernButton(bar, text="🌐 GitHub Issues",
+                     command=open_github_pressed,
+                     is_primary=True, width=160, height=34).pack(side="left", padx=(0, 8))
+        ModernButton(bar, text="📁 Tampilkan File" if self.lang == "id" else "📁 Show in Folder",
+                     command=lambda: self.show_report_file(target, win),
+                     is_primary=False, width=155, height=34).pack(side="left", padx=(0, 8))
+        ModernButton(bar, text="Tutup" if self.lang == "id" else "Close",
+                     command=win.destroy,
+                     is_primary=False, width=95, height=34).pack(side="right")
+        win.attributes("-topmost", True)
+        win.lift()
+        win.focus_force()
+        win.grab_set()
+        return win
+
+    def open_bug_report(self, target=None, parent=None, show_file=False):
+        browser_opened = webbrowser.open(BUG_REPORT_URL)
+        shown = self.show_report_file(target, parent) if (show_file and target) else False
+        if not browser_opened:
+            messagebox.showwarning(
+                "Browser not opened",
+                f"Could not open your browser. Open GitHub Issues yourself:\n{BUG_REPORT_URL}",
+                parent=parent or self)
+        return shown
+
+    def open_render_log(self):
+        session = self.trace_session or latest_trace_session()
+        if session and (session / "render_trace.log").exists():
+            os.startfile(session / "render_trace.log")
+        elif RENDER_TRACE_LOG.exists():
+            os.startfile(RENDER_TRACE_LOG)
+        else:
+            messagebox.showinfo("Tracer", "No render trace yet. Tick Tracer, then start the game.")
+
+    def open_captures(self):
+        CAPTURES_DIR.mkdir(parents=True, exist_ok=True)
+        os.startfile(CAPTURES_DIR)
+
+    def _finish_trace_session(self):
+        if not self.trace_session:
+            return ""
+        copy_into_trace_session(self.trace_session, [LOG])
+        return f"  Trace saved: user\\render_traces\\{self.trace_session.name}."
 
     def _show_crash_dialog(self, code):
-
         data = extract_crash_summary(LOG)
+        hints = explain_hardware_crash(code, data["detected_errors"], data["tail_context"], self.lang)
 
         win = tk.Toplevel(self)
         win.title("Basara 4 PC — Crash Diagnostic")
         self._apply_window_icon(win)
         apply_dark_titlebar(win)
         win.configure(bg=ROOT_BG)
-
-        win.geometry("740x560")
-
-        win.minsize(680, 480)
-
+        width, height, left, top = crash_dialog_geometry(self.winfo_screenwidth(), self.winfo_screenheight())
+        win.geometry(f"{width}x{height}+{left}+{top}")
+        win.minsize(min(560, width), min(380, height))
         win.grab_set()
 
-
-
-        btn_bar = ttk.Frame(win, style="TFrame", padding=12)
-
+        btn_bar = tk.Frame(win, bg=ROOT_BG, padx=12, pady=10)
         btn_bar.pack(side="bottom", fill="x")
 
+        scroll_host = tk.Frame(win, bg=ROOT_BG)
+        scroll_host.pack(side="top", fill="both", expand=True)
+        canvas = tk.Canvas(scroll_host, bg=ROOT_BG, highlightthickness=0, bd=0)
+        scrollbar = ttk.Scrollbar(scroll_host, orient="vertical", command=canvas.yview, style="Basara.Vertical.TScrollbar")
+        content = tk.Frame(canvas, bg=ROOT_BG)
+        content_window = canvas.create_window((0, 0), window=content, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        content.bind("<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(content_window, width=e.width))
 
-
-        header_frame = ttk.Frame(win, style="Card.TFrame", padding=14)
-
+        header_frame = tk.Frame(content, bg=CARD_BG, highlightbackground=CARD_BORDER, highlightthickness=1, padx=14, pady=12)
         header_frame.pack(side="top", fill="x", padx=12, pady=(12, 6))
 
-
-
         exit_hex = f"{code & 0xFFFFFFFF:#x}" if isinstance(code, int) else "Unknown"
+        hdr_title = (f"⚠️ Game Berhenti Mendadak (Exit Code {exit_hex})"
+                     if self.lang == "id" else f"⚠️ Game Stopped Unexpectedly (Exit Code {exit_hex})")
+        tk.Label(header_frame, text=hdr_title, bg=CARD_BG, fg=CRIMSON_HEADER, font=("Segoe UI Bold", 12)).pack(anchor="w")
 
-        tk.Label(
+        if getattr(self, "session_report_path", None):
+            saved_lbl = (f"Laporan sesi disimpan di: user\\reports\\{self.session_report_path.name}"
+                         if self.lang == "id" else f"Session report saved: user\\reports\\{self.session_report_path.name}")
+            tk.Label(header_frame, text=saved_lbl, bg=CARD_BG, fg=GOLD_TEXT, font=("Consolas", 9, "bold")).pack(anchor="w", pady=(3, 2))
 
-            header_frame,
-
-            text=f"⚠️ Game Berhenti Mendadak (Exit Code {exit_hex})",
-
-            bg=CARD_BG,
-
-            fg=RED_PRIMARY,
-
-            font=("Segoe UI Bold", 12)
-
-        ).pack(anchor="w")
-
-
-
-        tk.Label(
-
-            header_frame,
-
-            text="Terdeteksi indikasi error dari log permainan di bawah ini:",
-
-            bg=CARD_BG,
-
-            fg=FG,
-
-            font=("Segoe UI", 9)
-
-        ).pack(anchor="w", pady=(4, 6))
-
-
+        sub_lbl = ("Indikasi error dari log permainan:" if self.lang == "id" else "Detected error signatures from the game log:")
+        tk.Label(header_frame, text=sub_lbl, bg=CARD_BG, fg=FG, font=("Segoe UI", 9)).pack(anchor="w", pady=(4, 4))
 
         for err in data["detected_errors"]:
+            tk.Label(header_frame, text=f"• {err}", bg=CARD_BG, fg=RED_PRIMARY,
+                     font=("Consolas", 9, "bold"), wraplength=740, justify="left").pack(anchor="w", padx=6)
 
-            tk.Label(
+        if hints:
+            hint_hdr = "Kemungkinan Penyebab & Solusi:" if self.lang == "id" else "Likely Cause & Next Step:"
+            tk.Label(header_frame, text=hint_hdr, bg=CARD_BG, fg=GOLD_TEXT,
+                     font=("Segoe UI Bold", 9)).pack(anchor="w", pady=(8, 2))
+            for h in hints:
+                tk.Label(header_frame, text=f"→ {h}", bg=CARD_BG, fg=FG,
+                         font=("Segoe UI", 9), wraplength=740, justify="left").pack(anchor="w", padx=6, pady=1)
 
-                header_frame,
-
-                text=f"• {err}",
-
-                bg=CARD_BG,
-
-                fg=RED_PRIMARY,
-
-                font=("Consolas", 9, "bold"),
-
-                wraplength=680,
-
-                justify="left"
-
-            ).pack(anchor="w", padx=6)
-
-
-
-        body_frame = ttk.Frame(win, style="TFrame")
-
+        body_frame = tk.Frame(content, bg=ROOT_BG)
         body_frame.pack(side="top", fill="both", expand=True, padx=12, pady=6)
 
-
-
-        ttk.Label(body_frame, text="Cuplikan 10 Baris Log Terakhir (Raw Context):", style="Card.TLabel").pack(anchor="w", pady=(0, 4))
-
-        txt = tk.Text(body_frame, bg="#0D0B0A", fg="#D6CFC7", relief="flat", wrap="none", font=("Consolas", 9), padx=8, pady=8)
-
+        tail_hdr = ("Cuplikan 10 Baris Log Terakhir (last_run.log):"
+                    if self.lang == "id" else "Last 10 Log Lines (last_run.log):")
+        tk.Label(body_frame, text=tail_hdr, bg=ROOT_BG, fg=CRIMSON_HEADER, font=("Segoe UI Bold", 9)).pack(anchor="w", pady=(0, 4))
+        txt = tk.Text(body_frame, height=11, bg="#040814", fg="#FFE4E6", relief="flat", wrap="none",
+                      font=("Consolas", 9), padx=10, pady=8, highlightthickness=1, highlightbackground="#1E3A6E")
         txt.insert("1.0", data["tail_context"])
-
         txt.config(state="disabled")
-
         txt.pack(fill="both", expand=True)
 
-
-
         def copy_details():
-
-            try:
-
-                k = ctypes.windll.kernel32
-
-                class MEMORYSTATUSEX(ctypes.Structure):
-
-                    _fields_ = [
-
-                        ("dwLength", wintypes.DWORD), ("dwMemoryLoad", wintypes.DWORD),
-
-                        ("ullTotalPhys", ctypes.c_uint64), ("ullAvailPhys", ctypes.c_uint64),
-
-                        ("ullTotalPageFile", ctypes.c_uint64), ("ullAvailPageFile", ctypes.c_uint64),
-
-                        ("ullTotalVirtual", ctypes.c_uint64), ("ullAvailVirtual", ctypes.c_uint64),
-
-                        ("ullAvailExtendedVirtual", ctypes.c_uint64),
-
-                    ]
-
-                mem = MEMORYSTATUSEX()
-
-                mem.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
-
-                k.GlobalMemoryStatusEx(ctypes.byref(mem))
-
-                ram_total = f"{mem.ullTotalPhys // (1024*1024)} MB"
-
-                ram_avail = f"{mem.ullAvailPhys // (1024*1024)} MB"
-
-                commit_avail = f"{mem.ullAvailPageFile // (1024*1024)} MB"
-
-            except Exception:
-
-                ram_total = ram_avail = commit_avail = "N/A"
-
-
-
-            gpu_list = "\n".join(f"  - {name}" for _, name, _ in SYSTEM_GPUS) if SYSTEM_GPUS else "  - None detected"
-
-
-
-            audio_tail = ""
-
-            if AUDIO_LOG.is_file():
-
-                try:
-
-                    a_lines = AUDIO_LOG.read_text(encoding="utf-8", errors="replace").splitlines()
-
-                    if a_lines:
-
-                        audio_tail = "\n".join(a_lines[-6:])
-
-                except Exception:
-
-                    pass
-
-
-
-            clip_text = (
-
-                f"=== Sengoku Basara 4 PC — Crash Diagnostic Report ===\n"
-
-                f"Version       : v{VERSION}\n"
-
-                f"Exit Code     : {exit_hex}\n"
-
-                f"OS            : {platform.system()} {platform.release()} (Build {platform.version()})\n"
-
-                f"Architecture  : {platform.machine()} ({platform.processor()})\n"
-
-                f"RAM           : Total {ram_total} | Free {ram_avail} | Available Commit {commit_avail}\n"
-
-                f"Vulkan GPUs   :\n{gpu_list}\n"
-
-                f"Detected Fatal Signatures:\n" + "\n".join(f"  * {e}" for e in data["detected_errors"]) + "\n\n"
-
-                f"--- [Last 10 Log Lines (last_run.log)] ---\n"
-
-                f"{data['tail_context']}\n"
-
-            )
-
-            if audio_tail:
-
-                clip_text += f"\n--- [Recent Audio Log (audio_debug.log)] ---\n{audio_tail}\n"
-
-
-
-            clip_text += "\n=== End of Report ==="
-
+            masker = self._masker()
+            report = self.session_report or self._last_session_report()
+            if report and basara4_report:
+                clip_text = masker(basara4_report.render_text(
+                    report, getattr(self, "session_tail", None),
+                    sections=[("Render trace", render_trace_summary(report))]))
+            else:
+                clip_text = masker(data["tail_context"]) if masker else data["tail_context"]
             self.clipboard_clear()
-
             self.clipboard_append(clip_text)
-
             messagebox.showinfo(
-
-                "Tersalin ke Clipboard",
-
-                "Laporan crash lengkap (spek hardware, GPU, log error, dan audio log) berhasil disalin!\n"
-
-                "Anda tinggal Paste (Ctrl+V) langsung ke Discord untuk bantuan teknis.",
-
+                "Tersalin ke Clipboard" if self.lang == "id" else "Copied to Clipboard",
+                ("Ringkasan crash berhasil disalin ke Clipboard!\n"
+                 "Untuk laporan paling lengkap, klik 'Simpan Laporan (.zip)' dan lampirkan di GitHub Issues.")
+                if self.lang == "id" else
+                ("Crash summary copied to Clipboard!\n"
+                 "For a complete report, click 'Save Report (.zip)' and attach the zip on GitHub Issues."),
                 parent=win
-
             )
 
-
-
-        def open_discord():
-
-            webbrowser.open("https://discord.gg/UBZc57bBMa")
-
-
-
-        ttk.Button(btn_bar, text="📋 Copy Error ke Clipboard", command=copy_details).pack(side="left", padx=4)
-
-        ttk.Button(btn_bar, text="📁 Buka File Log", command=self.open_log).pack(side="left", padx=4)
-
-        ttk.Button(btn_bar, text="🌐 Lapor ke Discord", command=open_discord).pack(side="left", padx=4)
-
-        ttk.Button(btn_bar, text="Tutup", command=win.destroy).pack(side="right", padx=4)
+        ModernButton(btn_bar, text="📦 Simpan Laporan (.zip)" if self.lang == "id" else "📦 Save Report (.zip)",
+                     command=lambda: self.send_report(win),
+                     is_primary=True, width=185, height=34).pack(side="left", padx=(0, 6))
+        ModernButton(btn_bar, text="📋 Copy Ringkasan" if self.lang == "id" else "📋 Copy Summary",
+                     command=copy_details, is_primary=False, width=150, height=34).pack(side="left", padx=(0, 6))
+        ModernButton(btn_bar, text="📁 Buka Log" if self.lang == "id" else "📁 Open Log",
+                     command=self.open_log, is_primary=False, width=120, height=34).pack(side="left", padx=(0, 6))
+        ModernButton(btn_bar, text="🌐 GitHub Issues",
+                     command=lambda: self.open_bug_report(parent=win), is_primary=False, width=135, height=34).pack(side="left", padx=(0, 6))
+        ModernButton(btn_bar, text="Tutup" if self.lang == "id" else "Close",
+                     command=win.destroy, is_primary=False, width=95, height=34).pack(side="right")
 
 
 
@@ -6702,7 +7625,7 @@ class Launcher(tk.Tk):
         btn_top_canvas = tk.Canvas(top_bar, width=170, height=32, bg="#070E20", bd=0, highlightthickness=0)
         btn_top_canvas.pack(side="left")
         CanvasButton(btn_top_canvas, 85, 16, 166, 28, text="⚡ GitHub Repository",
-                     command=lambda: webbrowser.open("https://github.com/timotius/basara4-native-pc"), is_primary=True, lang=self.lang)
+                     command=lambda: webbrowser.open(f"https://github.com/{GITHUB_REPO}"), is_primary=True, lang=self.lang)
 
         box_frame = tk.Frame(win, bg="#070E20")
         box_frame.pack(fill="both", expand=True, padx=10, pady=10)
@@ -6717,129 +7640,109 @@ class Launcher(tk.Tk):
         box.insert("1.0", text)
         box.config(state="disabled")
         apply_dark_titlebar(win)
-    def _deiconify(self):
 
+    def _deiconify(self):
         self.deiconify()
 
-
+    def _request_game_close(self):
+        if not self.proc or self.proc.poll() is not None:
+            return False
+        self.user_stopped = True
+        self._stopped_by_user = True
+        self.close_requested = True
+        self.stop_note = "Closed by you." if self.lang != "id" else "Ditutup oleh Anda."
+        request_window_close(self.proc.pid)
+        self.stop.is_primary = True
+        self.stop.config(text=self.t("force_stop_btn"))
+        self.status.config(text=self.t("closing_graceful"))
+        return True
 
     def on_stop(self):
-
+        if not self.proc or self.proc.poll() is not None:
+            return
+        if not self.close_requested:
+            log_launch(f"Requesting graceful WM_CLOSE for game process PID {self.proc.pid}")
+            self._request_game_close()
+            return
+        self.user_stopped = True
         self._stopped_by_user = True
-
-        if self.proc and self.proc.poll() is None:
-
-            try:
-
-                log_launch(f"Stopping game process PID {self.proc.pid}")
-
-                self.proc.kill()
-
-            except Exception as e:
-
-                log_launch(f"Error terminating process: {e}")
-
-
+        self.forced_stop = True
+        self.stop_note = "Force-stopped by you." if self.lang != "id" else "Dihentikan paksa oleh Anda."
+        try:
+            log_launch(f"Force-stopping game process PID {self.proc.pid}")
+            self.proc.kill()
+        except Exception as e:
+            log_launch(f"Error terminating process: {e}")
 
     def _poll(self):
-
         if self.proc and self.proc.poll() is not None:
-
             code = self.proc.returncode
-
             log_launch(f"Game process exited with returncode {code:#x} ({code})")
-
             self.proc = None
-
             self.busy = False
-
             self.play.config(state="normal")
-
-            self.stop.config(state="disabled")
-
+            self.stop.is_primary = False
+            self.stop.config(state="disabled", text=self.t("stop_btn"))
+            self._finish_session_report(code)
+            self._finish_trace_session()
             if hasattr(self, "header_status_pill"):
-
                 self.header_status_pill.set_status("ready", self.t("ready"))
-
-            if code not in (0, None) and not getattr(self, "_stopped_by_user", False):
-
+            user_stopped = bool(self.user_stopped or getattr(self, "_stopped_by_user", False))
+            if code not in (0, None) and not user_stopped:
                 self._deiconify()
-
                 self._show_crash_dialog(code)
-
             if self.play_now:
-
-                if code in (0, None) or getattr(self, "_stopped_by_user", False):
-
+                if code in (0, None) or user_stopped:
                     self.destroy()
-
                 return
-
-            err_msg = self.t("exited_with_code", code=f"{code & 0xFFFFFFFF:#x}") if (code not in (0, None) and not getattr(self, "_stopped_by_user", False)) else None
-
-            self.status.config(text=err_msg if err_msg else self.t("closed"))
-
+            trace_note = render_trace_summary(self.trace_session) if self.cfg.get("render_trace") else ""
+            if user_stopped:
+                base_text = self.stop_note or self.t("closed")
+            elif code not in (0, None):
+                base_text = self.t("exited_with_code", code=f"{code & 0xFFFFFFFF:#x}")
+            else:
+                base_text = self.t("closed")
+            self.status.config(text=base_text + trace_note)
             self._load_ini_into_ui()
-
         self.after(500, self._poll)
 
 
 
     # ---- controller and files ----
 
-    def map_pad(self, extra):
-
+    def map_pad(self, extra=None):
         exe = BIN / "basara4-pad-mapper.exe"
-
         if not exe.is_file():
-
             messagebox.showerror(self.t("err_runtime_missing"), str(exe))
-
             return
-
+        if basara4_controller is None:
+            messagebox.showerror(self.t("control_gamepad_btn"), "basara4_controller.py is missing from launcher\\.")
+            return
+        sticks_only = "--sticks" in (extra or ())
+        if self.controller_win is not None:
+            try:
+                if self.controller_win.winfo_exists():
+                    self.controller_win.set_sticks_only(sticks_only)
+                    self.controller_win.lift()
+                    self.controller_win.focus_force()
+                    return
+            except tk.TclError:
+                pass
         env = os.environ.copy()
-
         env["PATH"] = str(BIN) + os.pathsep + env.get("PATH", "")
-
         USER.mkdir(parents=True, exist_ok=True)
-
-
-
-        if not MAPPING.exists() or MAPPING.stat().st_size == 0:
-
-            MAPPING.write_text(DEFAULT_XINPUT_MAPPING, encoding="utf-8")
-
-
-
-        runner_bat = USER / "run_pad_mapper.bat"
-
-        extra_args_str = " ".join(f'"{a}"' for a in extra)
-
-        bat_lines = [
-            "@echo off",
-            "chcp 65001 >nul",
-            "title Sengoku Basara 4 - Gamepad Mapper (Timotius)",
-            f'cd /d "{BIN}"',
-            f'"{exe}" "{MAPPING}" {extra_args_str}',
-            "echo.",
-            "echo ==================================================",
-            "echo [OK] Pemetaan stik selesai. Tekan tombol apa saja untuk menutup.",
-            "pause >nul"
-        ]
-        try:
-            runner_bat.write_text("\r\n".join(bat_lines) + "\r\n", encoding="utf-8")
-        except Exception as e:
-            log_debug(f"Failed to write pad mapper runner script: {e}")
-
-        try:
-            cmd_line = f'cmd.exe /c ""{runner_bat}""'
-            subprocess.Popen(cmd_line, cwd=str(BIN), env=env, creationflags=0x00000010)
-            self.status.config(text=self.t("pad_prompt"))
-            self.after(3000, self._pad_text)
-
-        except Exception as e:
-
-            messagebox.showerror(self.t("control_gamepad_btn"), f"Failed to start controller mapper:\n{e}")
+        colors = {
+            "bg": ROOT_BG,
+            "panel": CARD_BG,
+            "fg": FG,
+            "accent": RED_PRIMARY,
+            "border": CARD_BORDER,
+        }
+        self.controller_win = basara4_controller.ControllerWindow(
+            self, exe, MAPPING, env, sticks_only=sticks_only,
+            on_saved=lambda: (self._pad_text(), self.status.config(text="Controller mapping saved.")),
+            on_reset=self.reset_map, colors=colors, lang=self.lang,
+            on_manual=self.open_gamepad_preset_ui)
 
 
 
@@ -6882,6 +7785,10 @@ class Launcher(tk.Tk):
 
 
     def open_gamepad_control_ui(self):
+        """Open the v1.0.9 Unified No-Console Controller Mapping GUI (with access to Manual Presets)."""
+        self.map_pad([])
+
+    def open_gamepad_preset_ui(self):
 
         """Interactive Gamepad Rebinding Modal allowing direct button remapping & presets."""
 
@@ -7421,7 +8328,7 @@ class Launcher(tk.Tk):
 
         else:
 
-            messagebox.showinfo(self.t("open_audio_log"), "No audio log yet. Tick Audio debug log, then start the game.")
+            messagebox.showinfo(self.t("open_audio_log"), "No audio log yet. Tick Tracer, then start the game.")
 
 
 
@@ -7435,25 +8342,60 @@ class Launcher(tk.Tk):
 
 
 
-    def _close(self):
-
-        if self.proc and self.proc.poll() is None:
-
-            if not messagebox.askyesno("Sengoku Basara 4", self.t("confirm_close")):
-
-                return
-
-            self.proc.kill()
-
+    def _close_launcher(self):
+        if self.controller_win is not None:
+            try:
+                if self.controller_win.winfo_exists():
+                    self.controller_win.close()
+            except tk.TclError:
+                pass
         try:
-
             self._collect()
-
         except Exception:
-
             pass
-
         self.destroy()
+
+    def _wait_for_close_then_exit(self, remaining=6):
+        if not self.proc or self.proc.poll() is not None:
+            if self.proc:
+                code = self.proc.returncode
+                self.proc = None
+                self._finish_session_report(code)
+                self._finish_trace_session()
+            self._close_launcher()
+            return
+        if remaining <= 0:
+            self.status.config(text="Game is still closing. Click Force Stop or close again to force it.")
+            return
+        self.after(350, lambda: self._wait_for_close_then_exit(remaining - 1))
+
+    def _close(self):
+        if self.proc and self.proc.poll() is None:
+            if not self.close_requested:
+                if not messagebox.askyesno("Sengoku Basara 4", self.t("confirm_close")):
+                    return
+                self._request_game_close()
+                self._wait_for_close_then_exit()
+                return
+            if not messagebox.askyesno("Sengoku Basara 4",
+                                       "The game has not closed yet.\n\nForce-stop it now? Unsaved progress will be lost."):
+                return
+            self.user_stopped = True
+            self._stopped_by_user = True
+            self.forced_stop = True
+            self.stop_note = "Force-stopped by you."
+            try:
+                self.proc.kill()
+            except Exception:
+                pass
+            try:
+                code = self.proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                code = None
+            self.proc = None
+            self._finish_session_report(code)
+            self._finish_trace_session()
+        self._close_launcher()
 
 
 

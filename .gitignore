@@ -1,6 +1,6 @@
 # =============================================================================
 # Sengoku Basara 4 Sumeragi (Native PC Port & Launcher) - .gitignore
-# Developer: Timotius (v1.0.0)
+# Developer: Timotius (v1.0.9)
 # =============================================================================
 
 # Byte-compiled / optimized / DLL files
@@ -9,13 +9,14 @@ __pycache__/
 *$py.class
 *.pyc_raw
 
-# Backups & Temporary Files
+# Backups, Upstream Reference Bundles & Temporary Files
 *.bak
 *.tmp
 *.orig
 *.v1
 scratch/
 temp/
+Basara Update/
 
 # Copyrighted PS4 Game Dumps & PKG Archives (Strictly Excluded)
 # No copyrighted ROMs, game dumps, or packages should ever be committed.
@@ -24,9 +25,8 @@ game/*
 !game/.gitkeep
 *.pkg
 *.rar
-DLC/DLC/
-DLC/*.rar
-DLC/*.pkg
+DLC/
+mods/
 
 # Runtime Preparation & Decompiled Artifacts (Generated at launch)
 out/
@@ -36,14 +36,17 @@ out/
 *.wav
 logs/
 
-# Local User Saves, Caches, & Runtime Data
+# Local User Saves, Caches, Reports, Traces & Runtime Data
 user/cache/
 user/captures/
+user/crash/
 user/dlc/
 user/download/
 user/download0/
 user/game_data/
 user/home/
+user/render_traces/
+user/reports/
 user/savedata/
 user/screenshots/
 user/shader/
@@ -52,14 +55,19 @@ user/temp0/
 user/trophy/
 user/custom_trophy/
 user/data/
+user/patches/
+user/updates/
 user/*.log
 user/*.bmp
+user/*.zip
 user/test_*
 user/preview_*
 user/raw_bg_thumb.jpg
 user/basara4.ini
 user/launcher.json
 user/spartanport.ini
+user/run_pad_mapper.bat
+user/updater.cmd
 
 # OS & Editor Metadata
 Thumbs.db
