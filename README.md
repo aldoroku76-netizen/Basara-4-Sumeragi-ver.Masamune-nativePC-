@@ -25,7 +25,7 @@
 ### Crash Reports & Pre-Launch Diagnostics
 - **Readable Crash Dumps (`user/crash/`):** Native crashes now write human-readable register, fault module, and stack diagnostics to `user/crash/crash-<timestamp>.txt` and display a hardware-aware explanation in the launcher.
 - **Vulkan 1.3 Pre-Launch Check:** Before launching the game, the launcher probes `vulkan-1.dll` (`vkEnumerateInstanceVersion` and `vkEnumeratePhysicalDevices`) and displays a themed dark-navy + Samurai Red warning modal listing detected GPUs, Vulkan versions, and quick links to official NVIDIA/AMD/Intel drivers if Vulkan 1.3 is missing or outdated (while still allowing you to launch).
-- **Small-Screen Crash Dialog (`1366×768` Ready):** Crash diagnostic window dynamically fits low-resolution displays with a scrollable diagnostic pane and analways-reachable bottom action bar (**`Save Report (.zip)`**, **`Copy Summary`**, **`Open Log`**, **`GitHub Issues`**).
+- **Small-Screen Crash Dialog (`1366×768` Ready):** Crash diagnostic window dynamically fits low-resolution displays with a scrollable diagnostic pane and an always-reachable bottom action bar (**`Save Report (.zip)`**, **`Copy Summary`**, **`Open Log`**, **`GitHub Issues`**).
 
 ### Force Stop (Two-Stage Game Shutdown)
 - **Stage 1 (`Stop Game` / `Hentikan Game`):** Sends a graceful `WM_CLOSE` to the game window so in-flight save data can finish writing cleanly.
@@ -84,6 +84,18 @@
 - **`📄 Open Log` (`Buka Log`):** Open `user/last_run.log`.
 - **`🎵 Audio Log` (`Log Audio`):** Open `user/audio_debug.log`.
 - **`💾 Open Saves` (`Data Save`):** Open `user/savedata/`.
+
+---
+
+## ⚙️ Architecture Overview
+
+1. **Single-Canvas Pillow UI Engine (`_internal/python312.dll` + `launcher/basara4_launcher.py`):**
+   - Lightweight native Python 3.12 + Tkinter/Pillow Single-Canvas compositor with 2x-supersampled `_BTN_CACHE` pill buttons, 60 FPS luxury gold hover animations, bilingual **`EN | ID`** switching, and High-DPI mouse-wheel scrolling on constrained displays.
+2. **Ponytail Binary Translation Core (`bin/basara4-core.exe` + `scripts/prepare.py`):**
+   - Executes PS4 `eboot.bin` x86-64 code natively on Windows x64, translates Orbis OS system calls directly to Win32, and rewrites legacy ISA instructions via the bundled `iced-x86` disassembler on first launch.
+3. **Graphics, Audio & Input Pipeline:**
+   - **Vulkan 1.3 + FSR 1.0 & RCAS:** Translates PS4 GNM/GNMX draw calls to Vulkan SPIR-V with tile-aligned (`RENDER_TILE = 20`, `860×480` at `480p`) scaling and `e2d_node_pos_patch` menu highlight calibration.
+   - **ATRAC9 Audio & No-Console SDL2 Input:** Hardware-synchronized 48kHz PCM audio output paired with `bin/basara4-pad-mapper.exe --ui` over background JSON IPC (`basara4_controller.py`), plus F11 Tracer & `< 9 MB` masked Report zip bundling (`basara4_report.py`).
 
 ---
 

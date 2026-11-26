@@ -35,7 +35,7 @@ Pembaruan di v1.0.9
   - Dukungan High-DPI (Scaling Windows 125% / 150%):
     * Kolom pengaturan kiri dapat di-scroll dengan roda mouse pada layar laptop sehingga tombol
       MAINKAN GAME selalu terjangkau.
-  -Catatan Upgrade dari v1.0.9-beta atau versi lama:
+  - Catatan Upgrade dari v1.0.9-beta atau versi lama:
     * Cukup ekstrak ke folder launcher Anda. Save data di user\savedata\ tetap aman.
 
 Cara Bermain
@@ -57,6 +57,17 @@ Isi Folder
   user\       save data, shader cache, basara4.ini, last_run.log, crash\, reports\, captures\
   scripts\    skrip persiapan image game
   launcher\   kode sumber launcher
+
+Arsitektur Sistem
+  - Single-Canvas UI Engine (Python 3.12 + Pillow): Menggunakan Python 3.12 terintegrasi
+    (_internal\python312.dll) dengan rendering kanvas tunggal, tombol 2x supersampling, efek
+    hover 60 FPS, terjemahan EN | ID instan, dan dukungan scroll High-DPI 125%/150%.
+  - Ponytail Native x86-64 Runtime (bin\basara4-core.exe): Menjalankan kode x86-64 PS4
+    eboot.bin secara langsung di Windows x64 dengan penerjemahan syscall Orbis OS -> Win32
+    serta penulisan ulang instruksi CPU melalui disassembler iced-x86 bawaan.
+  - Grafis Vulkan 1.3 + Audio ATRAC9 + Input SDL2: Pipeline grafis GNM/GNMX ke Vulkan 1.3
+    dengan AMD FSR 1.0, RCAS, penyelarasan tile 20x20 (860x480), audio ATRAC9 tersinkronisasi,
+    GUI pemetaan kontroler tanpa jendela konsol (--ui JSON IPC), dan sistem Tracer + Report F11.
 
 Pintasan di Dalam Game (In-Game)
   Insert, atau R3 + L2 pada stik: membuka menu overlay di dalam game.
