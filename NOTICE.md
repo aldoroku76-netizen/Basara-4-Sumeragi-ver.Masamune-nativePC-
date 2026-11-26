@@ -36,7 +36,7 @@ Copyright (C) 2026 Timotius, released under the GNU GPL v2 or later.
 
 ## Official Repository & Links
 
-- **GitHub Repository**: https://github.com/timotius/basara4-native-pc
+- **GitHub Repository**: https://github.com/aldoroku76-netizen/Basara-4-Sumeragi-ver.Masamune-nativePC-
 
 ## What this project is built on
 

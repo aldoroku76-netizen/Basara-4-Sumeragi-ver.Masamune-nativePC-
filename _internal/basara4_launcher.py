@@ -1061,13 +1061,6 @@ def vulkan_warning(problem, probe, gpu_id, lang="en"):
         "1. Install the latest driver from the NVIDIA, AMD or Intel website (not from Windows Update).\n"
         "2. Restart the PC, then open the launcher again.\n\n"
         f"If this message still appears, this PC's graphics card probably does not support Vulkan {need}, so "
-        "the game cannot run.\n\n" + run_anyWAY if False else
-        f"⚠️ This game needs Vulkan {need} to show graphics, but Vulkan was not found on this PC.\n"
-        "Usually the graphics driver is not installed, is old, or is still the Windows default driver.\n\n"
-        "👉 Fix:\n"
-        "1. Install the latest driver from the NVIDIA, AMD or Intel website (not from Windows Update).\n"
-        "2. Restart the PC, then open the launcher again.\n\n"
-        f"If this message still appears, this PC's graphics card probably does not support Vulkan {need}, so "
         "the game cannot run.\n\n" + run_anyway)
 
 
@@ -5623,6 +5616,84 @@ class Launcher(tk.Tk):
 
     # ---- starting the game ----
 
+    def _show_vulkan_warning_modal(self, problem, probe, gpu_id):
+        """Themed dark-navy + Samurai Red Vulkan 1.3 pre-launch warning modal with GPU list & driver links."""
+        title, message = vulkan_warning(problem, probe, gpu_id, self.lang)
+        is_id = (self.lang == "id")
+        result = {"proceed": False}
+
+        win = tk.Toplevel(self)
+        win.title(title)
+        self._apply_window_icon(win)
+        apply_dark_titlebar(win)
+        win.configure(bg=ROOT_BG)
+        win.geometry("620x430")
+        win.minsize(540, 380)
+        win.transient(self)
+        win.grab_set()
+        self._vulkan_warning_win = win
+
+        def finish(proceed):
+            result["proceed"] = bool(proceed)
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+
+        win.protocol("WM_DELETE_WINDOW", lambda: finish(False))
+        win.bind("<Escape>", lambda _e: finish(False))
+
+        action_bar = tk.Frame(win, bg=ROOT_BG, padx=16, pady=12)
+        action_bar.pack(side="bottom", fill="x")
+
+        body = tk.Frame(win, bg=CARD_BG, highlightbackground=CARD_BORDER, highlightthickness=1, padx=16, pady=14)
+        body.pack(side="top", fill="both", expand=True, padx=14, pady=(14, 4))
+
+        tk.Label(body, text=f"⚠️ {title}", bg=CARD_BG, fg=CRIMSON_HEADER, font=("Segoe UI Bold", 13)).pack(anchor="w")
+
+        gpu_box = tk.Frame(body, bg=FIELD_BG, highlightbackground="#1E3A6E", highlightthickness=1, padx=12, pady=10)
+        gpu_box.pack(fill="both", expand=True, pady=(10, 10))
+        msg_widget = tk.Text(
+            gpu_box, bg=FIELD_BG, fg=FG, relief="flat", wrap="word",
+            font=("Segoe UI", 9), height=9, highlightthickness=0, bd=0,
+        )
+        msg_widget.insert("1.0", message)
+        msg_widget.config(state="disabled")
+        msg_widget.pack(fill="both", expand=True)
+
+        drv_hdr = "Unduh Driver GPU Resmi:" if is_id else "Download Official GPU Drivers:"
+        tk.Label(body, text=drv_hdr, bg=CARD_BG, fg=GOLD_TEXT, font=("Segoe UI Bold", 9)).pack(anchor="w", pady=(0, 6))
+
+        drv_row = tk.Frame(body, bg=CARD_BG)
+        drv_row.pack(fill="x")
+        for label, url in (
+            ("NVIDIA Drivers", "https://www.nvidia.com/drivers"),
+            ("AMD Drivers", "https://www.amd.com/en/support/download/drivers.html"),
+            ("Intel Drivers", "https://www.intel.com/content/www/us/en/download-center/home.html"),
+        ):
+            tk.Button(
+                drv_row, text=f"🌐 {label}", bg="#0F1C3F", fg="#93C5FD",
+                activebackground="#1E3A8A", activeforeground="#FFFFFF",
+                relief="flat", bd=0, padx=12, pady=5, cursor="hand2",
+                font=("Segoe UI Semibold", 9),
+                command=lambda u=url: webbrowser.open(u),
+            ).pack(side="left", padx=(0, 8))
+
+        start_txt = "Tetap Jalankan" if is_id else "Start Anyway"
+        cancel_txt = "Batal" if is_id else "Cancel"
+        ModernButton(
+            action_bar, text=start_txt, command=lambda: finish(True),
+            is_primary=True, width=160, height=34,
+        ).pack(side="left", padx=(0, 8))
+        ModernButton(
+            action_bar, text=cancel_txt, command=lambda: finish(False),
+            is_primary=False, width=120, height=34,
+        ).pack(side="right")
+
+        self.wait_window(win)
+        self._vulkan_warning_win = None
+        return result["proceed"]
+
     def on_play(self):
 
         if self.busy or self.proc:
@@ -5671,9 +5742,7 @@ class Launcher(tk.Tk):
 
             self._deiconify()
 
-            title, message = vulkan_warning(problem, VULKAN, gpu_id, self.lang)
-
-            if not messagebox.askyesno(title, message, icon="warning", default="no", parent=self):
+            if not self._show_vulkan_warning_modal(problem, VULKAN, gpu_id):
 
                 return
 

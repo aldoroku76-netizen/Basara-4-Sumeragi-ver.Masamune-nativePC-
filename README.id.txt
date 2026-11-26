@@ -1,5 +1,6 @@
 Basara 4 PC - oleh Timotius (v1.0.9)
 ====================================
+Copyright (c) 2026 Timotius
 Sengoku Basara 4 Sumeragi (PS4, CUSA01159) berjalan secara native di Windows x64.
 Perangkat lunak bebas, GNU GPL v2 atau versi lebih baru. Kredit: NOTICE.md. Tidak termasuk file game.
 GitHub: https://github.com/aldoroku76-netizen/Basara-4-Sumeragi-ver.Masamune-nativePC-
@@ -14,8 +15,9 @@ Pembaruan di v1.0.9
       ke grid tile 20x20 game (860x480).
   - Laporan Crash & Pemeriksaan Vulkan 1.3:
     * Crash dump yang mudah dibaca kini disimpan otomatis ke folder user\crash\.
-    * Launcher memeriksa dukungan driver Vulkan 1.3 sebelum game dimulai dan memberi peringatan jika
-      driver GPU Anda belum mendukung Vulkan 1.3.
+    * Launcher memeriksa dukungan driver Vulkan 1.3 sebelum game dimulai dan menampilkan jendela
+      peringatan bertema dark-navy & merah samurai dengan daftar GPU, versi Vulkan, serta tautan
+      driver resmi NVIDIA/AMD/Intel (tetap memberi opsi untuk melanjutkan).
     * Jendela diagnostik crash kini pas di layar kecil (1366x768) dengan panel rincian yang dapat di-scroll.
   - Hentikan Paksa (Force Stop Dua Tahap):
     * Klik pertama pada "Hentikan Game" meminta jendela game menutup secara normal agar save data aman.

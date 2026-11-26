@@ -24,7 +24,7 @@
 
 ### Crash Reports & Pre-Launch Diagnostics
 - **Readable Crash Dumps (`user/crash/`):** Native crashes now write human-readable register, fault module, and stack diagnostics to `user/crash/crash-<timestamp>.txt` and display a hardware-aware explanation in the launcher.
-- **Vulkan 1.3 Pre-Launch Check:** Before launching the game, the launcher probes `vulkan-1.dll` (`vkEnumerateInstanceVersion` and `vkEnumeratePhysicalDevices`) and warns clearly if Vulkan 1.3 is missing or if the selected GPU driver only supports an older Vulkan version.
+- **Vulkan 1.3 Pre-Launch Check:** Before launching the game, the launcher probes `vulkan-1.dll` (`vkEnumerateInstanceVersion` and `vkEnumeratePhysicalDevices`) and displays a themed dark-navy + Samurai Red warning modal listing detected GPUs, Vulkan versions, and quick links to official NVIDIA/AMD/Intel drivers if Vulkan 1.3 is missing or outdated (while still allowing you to launch).
 - **Small-Screen Crash Dialog (`1366×768` Ready):** Crash diagnostic window dynamically fits low-resolution displays with a scrollable diagnostic pane and analways-reachable bottom action bar (**`Save Report (.zip)`**, **`Copy Summary`**, **`Open Log`**, **`GitHub Issues`**).
 
 ### Force Stop (Two-Stage Game Shutdown)
@@ -113,6 +113,7 @@
 ---
 
 ## 👤 Credits & License
+- **Copyright (c) 2026 Timotius**
 - **Lead Developer & Maintainer:** **Timotius**
 - **License:** GNU General Public License v2.0 or later (`GPL-2.0-or-later`). Full third-party notices and runtime credits are documented in [NOTICE.md](NOTICE.md) and [LICENSE](LICENSE).
 - *Sengoku Basara 4 Sumeragi* is a trademark of CAPCOM CO., LTD. No copyrighted game assets, ROMs, or PKG files are included in this repository.
